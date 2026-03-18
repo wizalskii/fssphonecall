@@ -1,0 +1,33 @@
+{
+  "name": "fssphone",
+  "version": "1.0.0",
+  "description": "Web-based FSS phone call simulator for VATSIM with WebRTC voice communication",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "build": "npm run build:shared && npm run build:server && npm run build:client",
+    "build:shared": "cd shared && npm run build",
+    "build:server": "cd server && npm run build",
+    "build:client": "cd client && npm run build",
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install && cd ../shared && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "keywords": [
+    "vatsim",
+    "fss",
+    "webrtc",
+    "voice",
+    "simulator"
+  ],
+  "author": "",
+  "license": "MIT"
+}
