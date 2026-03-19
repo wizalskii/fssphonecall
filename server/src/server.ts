@@ -6,19 +6,26 @@ import { ClientToServerEvents, ServerToClientEvents } from '@fssphone/shared';
 import { ControllerRegistry } from './services/ControllerRegistry';
 import { CallManager } from './services/CallManager';
 import { SignalingService } from './services/SignalingService';
+import authRouter from './routes/auth';
+import { socketAuth } from './middleware/socketAuth';
+
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
 const app = express();
 const httpServer = createServer(app);
 const io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: CLIENT_URL,
     methods: ['GET', 'POST']
   }
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: CLIENT_URL }));
 app.use(express.json());
+
+// Auth routes
+app.use('/auth', authRouter);
 
 // Services
 const controllerRegistry = new ControllerRegistry();
@@ -34,9 +41,13 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Socket.IO auth middleware
+io.use(socketAuth);
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  console.log(`Client connected: ${socket.id}`);
+  const user = socket.data.user;
+  console.log(`Client connected: ${socket.id} (CID: ${user.cid})`);
 
   // Send current controller list to new client
   socket.emit('controllers:list', controllerRegistry.getAll());
@@ -44,7 +55,7 @@ io.on('connection', (socket) => {
   // Controller Registration
   socket.on('controller:register', (data) => {
     try {
-      const controller = controllerRegistry.register(socket.id, data);
+      const controller = controllerRegistry.register(socket.id, data, user.cid, user.name);
       socket.emit('controller:updated', controller);
       // Broadcast updated controller list to all clients
       io.emit('controllers:list', controllerRegistry.getAll());
@@ -87,7 +98,7 @@ io.on('connection', (socket) => {
       }
 
       // Create call
-      const call = callManager.create(socket.id, data);
+      const call = callManager.create(socket.id, user.cid, data);
 
       // Update controller status
       controllerRegistry.updateStatus(controller.id, 'busy');
@@ -237,5 +248,5 @@ const PORT = process.env.PORT || 3001;
 
 httpServer.listen(PORT, () => {
   console.log(`FSS Phone Server running on port ${PORT}`);
-  console.log(`Accepting connections from: ${process.env.CLIENT_URL || 'http://localhost:5173'}`);
+  console.log(`Accepting connections from: ${CLIENT_URL}`);
 });

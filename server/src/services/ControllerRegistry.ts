@@ -4,9 +4,11 @@ import { v4 as uuidv4 } from 'uuid';
 export class ControllerRegistry {
   private controllers: Map<string, Controller> = new Map();
 
-  register(socketId: string, data: ControllerRegistration): Controller {
+  register(socketId: string, data: ControllerRegistration, cid: string, name: string): Controller {
     const controller: Controller = {
       id: uuidv4(),
+      cid,
+      name,
       socketId,
       callsign: data.callsign,
       frequency: data.frequency,

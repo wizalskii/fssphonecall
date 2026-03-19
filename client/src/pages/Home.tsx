@@ -1,10 +1,12 @@
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import BetaDisclaimer from '../components/common/BetaDisclaimer';
 
 export default function Home() {
   const navigate = useNavigate();
+  const { user, isLoading, login, logout } = useAuth();
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-gray-100">
@@ -16,7 +18,6 @@ export default function Home() {
               alt="VATSIM"
               className="h-16 object-contain"
               onError={(e) => {
-                // Fallback to text if logo not found
                 e.currentTarget.style.display = 'none';
               }}
             />
@@ -26,7 +27,6 @@ export default function Home() {
               alt="ZLC ARTCC"
               className="h-16 object-contain"
               onError={(e) => {
-                // Fallback to text if logo not found
                 e.currentTarget.style.display = 'none';
               }}
             />
@@ -38,45 +38,68 @@ export default function Home() {
 
         <BetaDisclaimer />
 
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <div className="border-2 border-blue-200 rounded-lg p-6 hover:border-blue-400 transition-colors">
-            <h2 className="text-2xl font-semibold mb-3">Pilot</h2>
-            <p className="text-gray-600 mb-4">
-              Call FSS controllers to request IFR clearance delivery for your flight.
-            </p>
-            <Button
-              variant="primary"
-              size="lg"
-              className="w-full"
-              onClick={() => navigate('/pilot')}
-            >
-              Enter as Pilot
-            </Button>
-          </div>
+        {isLoading ? (
+          <div className="text-center py-8 text-gray-500">Loading...</div>
+        ) : user ? (
+          <>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 flex items-center justify-between">
+              <div>
+                <p className="font-semibold">{user.name}</p>
+                <p className="text-sm text-gray-600">CID {user.cid} &middot; {user.ratingShort}</p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={logout}>
+                Sign Out
+              </Button>
+            </div>
 
-          <div className="border-2 border-green-200 rounded-lg p-6 hover:border-green-400 transition-colors">
-            <h2 className="text-2xl font-semibold mb-3">Controller</h2>
-            <p className="text-gray-600 mb-4">
-              Go online as an FSS controller and answer calls from pilots requesting clearances.
-            </p>
-            <Button
-              variant="success"
-              size="lg"
-              className="w-full"
-              onClick={() => navigate('/controller')}
-            >
-              Enter as Controller
+            <div className="grid md:grid-cols-2 gap-6 mb-8">
+              <div className="border-2 border-blue-200 rounded-lg p-6 hover:border-blue-400 transition-colors">
+                <h2 className="text-2xl font-semibold mb-3">Pilot</h2>
+                <p className="text-gray-600 mb-4">
+                  Call FSS controllers to request IFR clearance delivery for your flight.
+                </p>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="w-full"
+                  onClick={() => navigate('/pilot')}
+                >
+                  Enter as Pilot
+                </Button>
+              </div>
+
+              <div className="border-2 border-green-200 rounded-lg p-6 hover:border-green-400 transition-colors">
+                <h2 className="text-2xl font-semibold mb-3">Controller</h2>
+                <p className="text-gray-600 mb-4">
+                  Go online as an FSS controller and answer calls from pilots requesting clearances.
+                </p>
+                <Button
+                  variant="success"
+                  size="lg"
+                  className="w-full"
+                  onClick={() => navigate('/controller')}
+                >
+                  Enter as Controller
+                </Button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-8 mb-8">
+            <p className="text-gray-600 mb-4">Sign in with your VATSIM account to get started.</p>
+            <Button variant="primary" size="lg" onClick={login}>
+              Sign in with VATSIM
             </Button>
           </div>
-        </div>
+        )}
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <h3 className="font-semibold mb-2">How it works:</h3>
           <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+            <li>Sign in with your VATSIM account</li>
             <li>Controllers go online with their callsign and frequency</li>
             <li>Pilots see available controllers and select one to call</li>
             <li>Real voice communication via WebRTC when call is answered</li>
-            <li>Either party can hang up to end the call</li>
           </ol>
         </div>
 

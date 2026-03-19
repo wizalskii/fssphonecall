@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Call } from '@fssphone/shared';
+import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { useWebRTC } from '../hooks/useWebRTC';
 import Card from '../components/common/Card';
@@ -9,6 +10,7 @@ import StatusIndicator from '../components/common/StatusIndicator';
 
 export default function ControllerView() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { socket, isConnected } = useSocket();
 
   const [isOnline, setIsOnline] = useState(false);
@@ -168,6 +170,7 @@ export default function ControllerView() {
                 <span className="text-red-600">BETA</span>
               </div>
               <h1 className="text-3xl font-bold">Controller - FSS Phone</h1>
+              {user && <p className="text-sm text-gray-500">{user.name} (CID {user.cid})</p>}
             </div>
             <div className="flex items-center gap-4">
               <StatusIndicator status={isConnected ? (isOnline ? 'online' : 'offline') : 'offline'} />
