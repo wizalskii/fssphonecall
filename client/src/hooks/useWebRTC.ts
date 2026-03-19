@@ -2,29 +2,13 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import type { WebRTCSignal, ICECandidateData } from '@fssphone/shared';
 import socketService from '../services/socketService';
 
-const PEER_CONFIG: RTCConfiguration = {
-  iceServers: [
-    { urls: 'stun:stun.cloudflare.com:3478' },
-    {
-      urls: 'turn:turn.cloudflare.com:3478?transport=udp',
-      username: import.meta.env.VITE_TURN_USERNAME || '',
-      credential: import.meta.env.VITE_TURN_CREDENTIAL || '',
-    },
-    {
-      urls: 'turns:turn.cloudflare.com:5349?transport=tcp',
-      username: import.meta.env.VITE_TURN_USERNAME || '',
-      credential: import.meta.env.VITE_TURN_CREDENTIAL || '',
-    },
-  ],
-  iceCandidatePoolSize: 10,
-};
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 interface UseWebRTCProps {
-  callId: string | null;
   isInitiator: boolean;
 }
 
-export function useWebRTC({ callId, isInitiator }: UseWebRTCProps) {
+export function useWebRTC({ isInitiator }: UseWebRTCProps) {
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -34,6 +18,8 @@ export function useWebRTC({ callId, isInitiator }: UseWebRTCProps) {
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const remoteConnectionId = useRef<string | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const activeCallId = useRef<string | null>(null);
+  const pendingSignals = useRef<Array<{ type: string; payload: unknown }>>([]);
 
   const startLocalStream = useCallback(async () => {
     try {
@@ -52,8 +38,27 @@ export function useWebRTC({ callId, isInitiator }: UseWebRTCProps) {
     }
   }, []);
 
-  const initializePeerConnection = useCallback((stream: MediaStream) => {
-    const pc = new RTCPeerConnection(PEER_CONFIG);
+  const initializePeerConnection = useCallback(async (stream: MediaStream) => {
+    // Fetch TURN credentials from the worker
+    let iceServers: RTCIceServer[] = [
+      { urls: 'stun:stun.cloudflare.com:3478' },
+    ];
+    try {
+      const res = await fetch(`${SERVER_URL}/turn-credentials`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('fssphone_token')}` },
+      });
+      if (res.ok) {
+        const creds = await res.json() as { username: string; credential: string };
+        iceServers.push(
+          { urls: 'turn:turn.cloudflare.com:3478?transport=udp', username: creds.username, credential: creds.credential },
+          { urls: 'turns:turn.cloudflare.com:5349?transport=tcp', username: creds.username, credential: creds.credential },
+        );
+      }
+    } catch {
+      // STUN-only fallback
+    }
+
+    const pc = new RTCPeerConnection({ iceServers, iceCandidatePoolSize: 10 });
 
     stream.getTracks().forEach(track => {
       pc.addTrack(track, stream);
@@ -64,9 +69,9 @@ export function useWebRTC({ callId, isInitiator }: UseWebRTCProps) {
     };
 
     pc.onicecandidate = (event) => {
-      if (event.candidate && callId && remoteConnectionId.current) {
+      if (event.candidate && activeCallId.current && remoteConnectionId.current) {
         const data: ICECandidateData = {
-          callId,
+          callId: activeCallId.current,
           from: socketService.connectionId!,
           to: remoteConnectionId.current,
           candidate: event.candidate.toJSON(),
@@ -80,11 +85,24 @@ export function useWebRTC({ callId, isInitiator }: UseWebRTCProps) {
     };
 
     peerConnection.current = pc;
-    return pc;
-  }, [callId]);
 
-  const createOffer = useCallback(async (remoteId: string) => {
-    if (!callId || !peerConnection.current) return;
+    // Process any signals that arrived before the peer connection was ready
+    const queued = pendingSignals.current.splice(0);
+    for (const signal of queued) {
+      if (signal.type === 'offer') {
+        await processOffer(signal.payload as WebRTCSignal);
+      } else if (signal.type === 'answer') {
+        await processAnswer(signal.payload as WebRTCSignal);
+      } else if (signal.type === 'ice-candidate') {
+        await processICECandidate(signal.payload as ICECandidateData);
+      }
+    }
+
+    return pc;
+  }, []);
+
+  const createOffer = useCallback(async (remoteId: string, callId: string) => {
+    if (!peerConnection.current) return;
 
     remoteConnectionId.current = remoteId;
 
@@ -103,10 +121,9 @@ export function useWebRTC({ callId, isInitiator }: UseWebRTCProps) {
       console.error('Error creating offer:', err);
       setError('Failed to create WebRTC offer');
     }
-  }, [callId]);
+  }, []);
 
-  const handleOffer = useCallback(async (payload: unknown) => {
-    const data = payload as WebRTCSignal;
+  const processOffer = async (data: WebRTCSignal) => {
     if (!peerConnection.current) return;
 
     remoteConnectionId.current = data.from;
@@ -127,37 +144,58 @@ export function useWebRTC({ callId, isInitiator }: UseWebRTCProps) {
       console.error('Error handling offer:', err);
       setError('Failed to handle WebRTC offer');
     }
-  }, []);
+  };
 
-  const handleAnswer = useCallback(async (payload: unknown) => {
-    const data = payload as WebRTCSignal;
+  const processAnswer = async (data: WebRTCSignal) => {
     if (!peerConnection.current) return;
-
     try {
       await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.sdp as RTCSessionDescriptionInit));
     } catch (err) {
       console.error('Error handling answer:', err);
       setError('Failed to handle WebRTC answer');
     }
-  }, []);
+  };
 
-  const handleICECandidate = useCallback(async (payload: unknown) => {
-    const data = payload as ICECandidateData;
+  const processICECandidate = async (data: ICECandidateData) => {
     if (!peerConnection.current) return;
-
     try {
       await peerConnection.current.addIceCandidate(new RTCIceCandidate(data.candidate as RTCIceCandidateInit));
     } catch (err) {
       console.error('Error adding ICE candidate:', err);
     }
+  };
+
+  const handleOffer = useCallback(async (payload: unknown) => {
+    if (!peerConnection.current) {
+      pendingSignals.current.push({ type: 'offer', payload });
+      return;
+    }
+    await processOffer(payload as WebRTCSignal);
   }, []);
 
-  const setupWebRTC = useCallback(async (remoteId: string) => {
+  const handleAnswer = useCallback(async (payload: unknown) => {
+    if (!peerConnection.current) {
+      pendingSignals.current.push({ type: 'answer', payload });
+      return;
+    }
+    await processAnswer(payload as WebRTCSignal);
+  }, []);
+
+  const handleICECandidate = useCallback(async (payload: unknown) => {
+    if (!peerConnection.current) {
+      pendingSignals.current.push({ type: 'ice-candidate', payload });
+      return;
+    }
+    await processICECandidate(payload as ICECandidateData);
+  }, []);
+
+  const setupWebRTC = useCallback(async (remoteId: string, callId: string) => {
+    activeCallId.current = callId;
     try {
       const stream = await startLocalStream();
-      initializePeerConnection(stream);
+      await initializePeerConnection(stream);
       if (isInitiator) {
-        await createOffer(remoteId);
+        await createOffer(remoteId, callId);
       }
     } catch (err) {
       console.error('Error setting up WebRTC:', err);
@@ -178,6 +216,8 @@ export function useWebRTC({ callId, isInitiator }: UseWebRTCProps) {
     setConnectionState('closed');
     setIsTransmitting(false);
     remoteConnectionId.current = null;
+    activeCallId.current = null;
+    pendingSignals.current = [];
   }, [localStream]);
 
   // Push-to-talk

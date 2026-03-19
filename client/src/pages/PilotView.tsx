@@ -22,7 +22,6 @@ export default function PilotView() {
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
   const { connectionState, remoteStream, error: webrtcError, isTransmitting, setupWebRTC, cleanup } = useWebRTC({
-    callId: currentCall?.id || null,
     isInitiator: true,
   });
 
@@ -49,7 +48,7 @@ export default function PilotView() {
       setCurrentCall(call);
       setCallStatus('active');
       if (call.controllerConnectionId) {
-        await setupWebRTC(call.controllerConnectionId);
+        await setupWebRTC(call.controllerConnectionId, call.id);
       }
     };
     const onCallEnded = (payload: unknown) => {
