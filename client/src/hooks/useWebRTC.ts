@@ -21,9 +21,11 @@ export function useWebRTC({ socket, callId, isInitiator }: UseWebRTCProps) {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isTransmitting, setIsTransmitting] = useState(false);
 
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const remoteSocketId = useRef<string | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
 
   // Get microphone access
   const startLocalStream = useCallback(async () => {
@@ -36,7 +38,10 @@ export function useWebRTC({ socket, callId, isInitiator }: UseWebRTCProps) {
         },
         video: false
       });
+      // Start muted (PTT off)
+      stream.getAudioTracks().forEach(track => { track.enabled = false; });
       setLocalStream(stream);
+      localStreamRef.current = stream;
       return stream;
     } catch (err) {
       console.error('Error accessing microphone:', err);
@@ -181,10 +186,42 @@ export function useWebRTC({ socket, callId, isInitiator }: UseWebRTCProps) {
       peerConnection.current = null;
     }
     setLocalStream(null);
+    localStreamRef.current = null;
     setRemoteStream(null);
     setConnectionState('closed');
+    setIsTransmitting(false);
     remoteSocketId.current = null;
   }, [localStream]);
+
+  // Push-to-talk: spacebar
+  const setTransmitting = useCallback((transmit: boolean) => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach(track => { track.enabled = transmit; });
+      setIsTransmitting(transmit);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !e.repeat && localStreamRef.current) {
+        e.preventDefault();
+        setTransmitting(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && localStreamRef.current) {
+        e.preventDefault();
+        setTransmitting(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [setTransmitting]);
 
   // Listen for WebRTC signals from socket
   useEffect(() => {
@@ -206,6 +243,8 @@ export function useWebRTC({ socket, callId, isInitiator }: UseWebRTCProps) {
     localStream,
     remoteStream,
     error,
+    isTransmitting,
+    setTransmitting,
     setupWebRTC,
     cleanup
   };
