@@ -1,36 +1,71 @@
-// Generate a simple ringing tone using Web Audio API
+// VSCS-style override / incoming call tone
+// Two-tone warble: alternating 853Hz and 960Hz (similar to VSCS alert tone)
+// Pattern: 300ms high, 300ms low, 300ms high, 300ms low, then 1.5s silence
+
 let audioCtx: AudioContext | null = null;
-let ringInterval: ReturnType<typeof setInterval> | null = null;
+let ringTimeout: ReturnType<typeof setTimeout> | null = null;
+let isRinging = false;
 
-function playRingBurst() {
+function getCtx(): AudioContext {
   if (!audioCtx) audioCtx = new AudioContext();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
 
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
+function playWarbleCycle() {
+  if (!isRinging) return;
+  const ctx = getCtx();
+  const now = ctx.currentTime;
 
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(440, audioCtx.currentTime);
-  osc.frequency.setValueAtTime(480, audioCtx.currentTime + 0.15);
+  // Master gain
+  const master = ctx.createGain();
+  master.gain.setValueAtTime(0.18, now);
+  master.connect(ctx.destination);
 
-  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+  // Two oscillators for the dual-tone warble
+  const tones = [
+    { freq: 853, start: 0, dur: 0.25 },
+    { freq: 960, start: 0.3, dur: 0.25 },
+    { freq: 853, start: 0.6, dur: 0.25 },
+    { freq: 960, start: 0.9, dur: 0.25 },
+  ];
 
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
+  for (const tone of tones) {
+    const osc = ctx.createOscillator();
+    const env = ctx.createGain();
 
-  osc.start();
-  osc.stop(audioCtx.currentTime + 0.3);
+    osc.type = 'sine';
+    osc.frequency.value = tone.freq;
+
+    // Sharp attack, sustain, sharp release
+    env.gain.setValueAtTime(0, now + tone.start);
+    env.gain.linearRampToValueAtTime(1, now + tone.start + 0.01);
+    env.gain.setValueAtTime(1, now + tone.start + tone.dur - 0.01);
+    env.gain.linearRampToValueAtTime(0, now + tone.start + tone.dur);
+
+    osc.connect(env);
+    env.connect(master);
+
+    osc.start(now + tone.start);
+    osc.stop(now + tone.start + tone.dur + 0.01);
+  }
+
+  // Schedule next cycle after this one finishes + pause
+  ringTimeout = setTimeout(() => {
+    if (isRinging) playWarbleCycle();
+  }, 2800);
 }
 
 export function startRinging() {
   stopRinging();
-  playRingBurst();
-  ringInterval = setInterval(playRingBurst, 2000);
+  isRinging = true;
+  playWarbleCycle();
 }
 
 export function stopRinging() {
-  if (ringInterval) {
-    clearInterval(ringInterval);
-    ringInterval = null;
+  isRinging = false;
+  if (ringTimeout) {
+    clearTimeout(ringTimeout);
+    ringTimeout = null;
   }
 }
