@@ -23,7 +23,6 @@ export default function ControllerView() {
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
   const { connectionState, remoteStream, error: webrtcError, isTransmitting, setupWebRTC, cleanup } = useWebRTC({
-    callId: currentCall?.id || null,
     isInitiator: false,
   });
 
@@ -37,7 +36,7 @@ export default function ControllerView() {
       setCurrentCall(call);
       setIncomingCall(null);
       if (call.pilotConnectionId) {
-        await setupWebRTC(call.pilotConnectionId);
+        await setupWebRTC(call.pilotConnectionId, call.id);
       }
     };
     const onCallEnded = (payload: unknown) => {

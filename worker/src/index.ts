@@ -11,6 +11,8 @@ export interface Env {
   VATSIM_REDIRECT_URI: string;
   JWT_SECRET: string;
   CLIENT_URL: string;
+  TURN_KEY_ID: string;
+  TURN_API_TOKEN: string;
 }
 
 export default {
@@ -35,6 +37,49 @@ export default {
     // Health check
     if (url.pathname === '/health') {
       return new Response(JSON.stringify({ status: 'ok' }), {
+        headers: { ...corsHeaders(env.CLIENT_URL), 'Content-Type': 'application/json' },
+      });
+    }
+
+    // TURN credentials
+    if (url.pathname === '/turn-credentials') {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      try {
+        await verifyToken(authHeader.slice(7), env.JWT_SECRET);
+      } catch {
+        return new Response('Invalid token', { status: 401 });
+      }
+
+      // Generate short-lived TURN credentials via Cloudflare Calls API
+      if (env.TURN_KEY_ID && env.TURN_API_TOKEN) {
+        try {
+          const res = await fetch(
+            `https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${env.TURN_API_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ ttl: 86400 }),
+            }
+          );
+          const creds = await res.json() as { iceServers: { username: string; credential: string } };
+          return new Response(JSON.stringify(creds.iceServers), {
+            headers: { ...corsHeaders(env.CLIENT_URL), 'Content-Type': 'application/json' },
+          });
+        } catch {
+          return new Response(JSON.stringify({ error: 'TURN unavailable' }), {
+            status: 503,
+            headers: { ...corsHeaders(env.CLIENT_URL), 'Content-Type': 'application/json' },
+          });
+        }
+      }
+      return new Response(JSON.stringify({ error: 'TURN not configured' }), {
+        status: 503,
         headers: { ...corsHeaders(env.CLIENT_URL), 'Content-Type': 'application/json' },
       });
     }
