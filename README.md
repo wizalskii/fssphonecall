@@ -2,7 +2,7 @@
 
 **BETA - TESTING ONLY**
 
-A web-based Flight Service Station (FSS) phone call simulator for VATSIM with real-time voice communication via WebRTC.
+A web-based Flight Service Station (FSS) phone call simulator for VATSIM with real-time voice communication.
 
 **Developed for ZLC ARTCC (Salt Lake City ARTCC)**
 
