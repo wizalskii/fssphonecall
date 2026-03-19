@@ -4,8 +4,17 @@ import type { ClientToServerEvents, ServerToClientEvents, WebRTCSignal, ICECandi
 
 const PEER_CONFIG: RTCConfiguration = {
   iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    {
+      urls: 'turn:turn.cloudflare.com:3478?transport=udp',
+      username: import.meta.env.VITE_TURN_USERNAME || '',
+      credential: import.meta.env.VITE_TURN_CREDENTIAL || ''
+    },
+    {
+      urls: 'turns:turn.cloudflare.com:5349?transport=tcp',
+      username: import.meta.env.VITE_TURN_USERNAME || '',
+      credential: import.meta.env.VITE_TURN_CREDENTIAL || ''
+    }
   ],
   iceCandidatePoolSize: 10
 };
