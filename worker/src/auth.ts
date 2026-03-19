@@ -1,14 +1,37 @@
+import { SignJWT, jwtVerify } from 'jose';
 import { signToken, verifyToken } from './utils/jwt';
 import { corsHeaders } from './utils/cors';
 import type { Env } from './index';
 import type { VatsimUser } from '@fssphone/shared';
 
+/** Generate a signed, short-lived state token for CSRF protection */
+async function generateState(jwtSecret: string): Promise<string> {
+  const secret = new TextEncoder().encode(jwtSecret);
+  return await new SignJWT({ purpose: 'oauth-state' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('10m')
+    .sign(secret);
+}
+
+async function verifyState(state: string, jwtSecret: string): Promise<boolean> {
+  try {
+    const secret = new TextEncoder().encode(jwtSecret);
+    const { payload } = await jwtVerify(state, secret);
+    return payload.purpose === 'oauth-state';
+  } catch {
+    return false;
+  }
+}
+
 export async function handleAuthVatsim(env: Env): Promise<Response> {
+  const state = await generateState(env.JWT_SECRET);
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: env.VATSIM_CLIENT_ID,
     redirect_uri: env.VATSIM_REDIRECT_URI,
     scope: 'full_name vatsim_details',
+    state,
   });
   return Response.redirect(`${env.VATSIM_AUTH_URL}/oauth/authorize?${params}`, 302);
 }
@@ -16,9 +39,15 @@ export async function handleAuthVatsim(env: Env): Promise<Response> {
 export async function handleAuthCallback(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state');
 
   if (!code) {
     return Response.redirect(`${env.CLIENT_URL}?error=missing_code`, 302);
+  }
+
+  // Verify CSRF state
+  if (!state || !(await verifyState(state, env.JWT_SECRET))) {
+    return Response.redirect(`${env.CLIENT_URL}?error=invalid_state`, 302);
   }
 
   try {

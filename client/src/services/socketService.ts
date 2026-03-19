@@ -28,11 +28,25 @@ class WebSocketService {
     this.doConnect();
   }
 
-  private doConnect(): void {
+  private async doConnect(): Promise<void> {
     if (!this.token) return;
     this.cleanup();
 
-    const wsUrl = SERVER_URL.replace(/^http/, 'ws') + '/ws?token=' + encodeURIComponent(this.token);
+    // Exchange long-lived JWT for a short-lived WebSocket ticket
+    let ticket: string;
+    try {
+      const res = await fetch(`${SERVER_URL}/ws-ticket`, {
+        headers: { Authorization: `Bearer ${this.token}` },
+      });
+      if (!res.ok) throw new Error('Ticket fetch failed');
+      const data = await res.json() as { ticket: string };
+      ticket = data.ticket;
+    } catch {
+      this.scheduleReconnect();
+      return;
+    }
+
+    const wsUrl = SERVER_URL.replace(/^http/, 'ws') + '/ws?ticket=' + encodeURIComponent(ticket);
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
@@ -82,6 +96,7 @@ class WebSocketService {
   }
 
   private cleanup(): void {
+    this.reconnectDelay = 500;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
