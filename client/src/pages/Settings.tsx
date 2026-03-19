@@ -46,6 +46,23 @@ export default function Settings() {
     }
   }, []);
 
+  // Cleanup mic test on unmount
+  useEffect(() => {
+    return () => {
+      const ref = micTestRef.current;
+      if (ref.stream) {
+        ref.stream.getTracks().forEach(t => t.stop());
+      }
+      if (ref.recorder && ref.recorder.state === 'recording') {
+        ref.recorder.stop();
+      }
+      if (speakerTestRef.current) {
+        speakerTestRef.current.close().catch(() => {});
+        speakerTestRef.current = null;
+      }
+    };
+  }, []);
+
   // Enumerate audio devices
   useEffect(() => {
     async function loadDevices() {

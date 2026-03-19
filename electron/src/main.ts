@@ -36,6 +36,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   });
 
@@ -120,6 +121,7 @@ ipcMain.handle('get-settings', () => {
 ipcMain.handle('set-setting', (_event, key: string, value: unknown) => {
   const allowedKeys = ['pttKey', 'audioInput', 'audioOutput'];
   if (!allowedKeys.includes(key)) return;
+  if (typeof value !== 'string' || value.length > 200) return;
   store.set(key, value);
   if (key === 'pttKey') registerPTT();
 });

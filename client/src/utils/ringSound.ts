@@ -44,8 +44,4 @@ export function stopRinging() {
     clearInterval(ringInterval);
     ringInterval = null;
   }
-  if (audioCtx) {
-    audioCtx.close();
-    audioCtx = null;
-  }
 }

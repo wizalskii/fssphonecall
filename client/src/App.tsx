@@ -8,6 +8,7 @@ import AuthCallback from './pages/AuthCallback';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Settings from './pages/Settings';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import RatingGate from './components/common/RatingGate';
 
 function App() {
   return (
@@ -24,7 +25,7 @@ function App() {
           <ProtectedRoute><PilotView /></ProtectedRoute>
         } />
         <Route path="/controller" element={
-          <ProtectedRoute><ControllerView /></ProtectedRoute>
+          <ProtectedRoute><RatingGate minRating={2}><ControllerView /></RatingGate></ProtectedRoute>
         } />
       </Routes>
       </ThemeProvider>
