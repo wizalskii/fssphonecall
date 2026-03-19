@@ -143,7 +143,9 @@ export class LobbyDO extends DurableObject<Env> {
     if (meta) {
       this.handleDisconnect(meta);
     }
-    ws.close(code, reason);
+    // 1005 and 1006 are reserved codes that can't be sent in a close frame
+    const safeCode = (code === 1005 || code === 1006) ? 1000 : code;
+    ws.close(safeCode, reason);
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
