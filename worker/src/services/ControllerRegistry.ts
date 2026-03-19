@@ -17,6 +17,10 @@ export class ControllerRegistry {
     return controller;
   }
 
+  restore(controller: Controller): void {
+    this.controllers.set(controller.id, controller);
+  }
+
   unregister(controllerId: string): void {
     this.controllers.delete(controllerId);
   }

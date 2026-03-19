@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { VatsimUser } from '@fssphone/shared';
 import type { ClientMessage, ServerMessage, WebRTCSignal, ICECandidateData } from '@fssphone/shared';
+import type { Call } from '@fssphone/shared';
 import { ControllerRegistry } from './services/ControllerRegistry';
 import { CallManager } from './services/CallManager';
 import type { Env } from './index';
@@ -8,21 +9,67 @@ import type { Env } from './index';
 interface ConnectionMeta {
   connectionId: string;
   user: VatsimUser;
+  // Track what role this connection has registered as
+  controllerId?: string;
 }
 
 export class LobbyDO extends DurableObject<Env> {
   private controllers: ControllerRegistry;
   private calls: CallManager;
+  private initialized = false;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.controllers = new ControllerRegistry();
     this.calls = new CallManager();
 
-    // Auto-respond to ping without waking the DO
     this.ctx.setWebSocketAutoResponse(
       new WebSocketRequestResponsePair('ping', 'pong')
     );
+
+    // Restore state before handling any messages
+    this.ctx.blockConcurrencyWhile(async () => {
+      await this.restoreState();
+    });
+  }
+
+  /** Rebuild in-memory state from live WebSocket attachments and storage after hibernation */
+  private async restoreState(): Promise<void> {
+    if (this.initialized) return;
+    this.initialized = true;
+
+    // Restore controllers from WebSocket attachments
+    for (const ws of this.ctx.getWebSockets()) {
+      const meta = ws.deserializeAttachment() as (ConnectionMeta & {
+        controllerCallsign?: string;
+        controllerFrequency?: string;
+        controllerStatus?: 'online' | 'busy';
+      }) | null;
+      if (!meta) continue;
+
+      if (meta.controllerId && meta.controllerCallsign) {
+        const existing = this.controllers.findById(meta.controllerId);
+        if (!existing) {
+          this.controllers.restore({
+            id: meta.controllerId,
+            cid: meta.user.cid,
+            name: meta.user.name,
+            connectionId: meta.connectionId,
+            callsign: meta.controllerCallsign,
+            frequency: meta.controllerFrequency!,
+            status: meta.controllerStatus || 'online',
+          });
+        }
+      }
+    }
+
+    // Restore calls from DO storage
+    const entries = await this.ctx.storage.list<Call>({ prefix: 'call:' });
+    for (const [, call] of entries) {
+      if (call.status !== 'ended') {
+        this.calls.restore(call);
+      }
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -43,7 +90,6 @@ export class LobbyDO extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server, [connectionId]);
     server.serializeAttachment(meta);
 
-    // Send welcome + current controller list
     server.send(JSON.stringify({ type: 'welcome', payload: { connectionId } }));
     server.send(JSON.stringify({ type: 'controllers:list', payload: this.controllers.getAll() }));
 
@@ -68,7 +114,7 @@ export class LobbyDO extends DurableObject<Env> {
         this.handleControllerRegister(ws, meta, msg.payload!);
         break;
       case 'controller:unregister':
-        this.handleControllerUnregister(meta);
+        this.handleControllerUnregister(ws, meta);
         break;
       case 'call:initiate':
         this.handleCallInitiate(ws, meta, msg.payload!);
@@ -112,14 +158,30 @@ export class LobbyDO extends DurableObject<Env> {
 
   private handleControllerRegister(ws: WebSocket, meta: ConnectionMeta, data: { callsign: string; frequency: string }): void {
     const controller = this.controllers.register(meta.connectionId, data, meta.user.cid, meta.user.name);
+
+    // Persist controller info in the WebSocket attachment so it survives hibernation
+    const updatedMeta: ConnectionMeta & { controllerCallsign: string; controllerFrequency: string; controllerStatus: string } = {
+      ...meta,
+      controllerId: controller.id,
+      controllerCallsign: data.callsign,
+      controllerFrequency: data.frequency,
+      controllerStatus: 'online',
+    };
+    ws.serializeAttachment(updatedMeta);
+
     this.sendTo(meta.connectionId, { type: 'controller:updated', payload: controller });
     this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
   }
 
-  private handleControllerUnregister(meta: ConnectionMeta): void {
+  private handleControllerUnregister(ws: WebSocket, meta: ConnectionMeta): void {
     const controller = this.controllers.findByConnectionId(meta.connectionId);
     if (controller) {
       this.controllers.unregister(controller.id);
+
+      // Clear controller info from attachment
+      const updatedMeta: ConnectionMeta = { connectionId: meta.connectionId, user: meta.user };
+      ws.serializeAttachment(updatedMeta);
+
       this.broadcast({ type: 'controller:removed', payload: { controllerId: controller.id } });
       this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
     }
@@ -144,24 +206,34 @@ export class LobbyDO extends DurableObject<Env> {
     const call = this.calls.create(meta.connectionId, meta.user.cid, controller.connectionId, data);
     this.controllers.updateStatus(controller.id, 'busy');
 
+    // Update controller's attachment with busy status
+    this.updateControllerAttachmentStatus(controller.connectionId, 'busy');
+
     this.broadcast({ type: 'controller:updated', payload: controller });
     this.sendTo(meta.connectionId, { type: 'call:ringing', payload: call });
     this.sendTo(controller.connectionId, { type: 'call:incoming', payload: call });
+
+    // Store call in DO storage for hibernation survival
+    this.ctx.storage.put(`call:${call.id}`, call);
   }
 
   private handleCallAnswer(ws: WebSocket, meta: ConnectionMeta, data: { callId: string }): void {
-    const call = this.calls.findById(data.callId);
+    let call = this.calls.findById(data.callId);
+
+    // If not in memory, try storage
     if (!call) {
+      // Will be loaded async, but for now check synchronously
       this.sendTo(meta.connectionId, { type: 'error', payload: { message: 'Call not found' } });
       return;
     }
 
-    // Refresh controller's connection ID
     call.controllerConnectionId = meta.connectionId;
     this.calls.updateStatus(data.callId, 'active');
 
     this.sendTo(call.pilotConnectionId, { type: 'call:established', payload: call });
     this.sendTo(meta.connectionId, { type: 'call:established', payload: call });
+
+    this.ctx.storage.put(`call:${call.id}`, call);
   }
 
   private handleCallReject(ws: WebSocket, data: { callId: string }): void {
@@ -169,9 +241,12 @@ export class LobbyDO extends DurableObject<Env> {
     if (!call) return;
 
     this.calls.end(data.callId);
+    this.ctx.storage.delete(`call:${data.callId}`);
+
     const controller = this.controllers.findById(call.controllerId);
     if (controller) {
       this.controllers.updateStatus(controller.id, 'online');
+      this.updateControllerAttachmentStatus(controller.connectionId, 'online');
       this.broadcast({ type: 'controller:updated', payload: controller });
     }
     this.sendTo(call.pilotConnectionId, { type: 'call:ended', payload: { callId: data.callId, reason: 'Call rejected' } });
@@ -182,9 +257,12 @@ export class LobbyDO extends DurableObject<Env> {
     if (!call) return;
 
     this.calls.end(data.callId);
+    this.ctx.storage.delete(`call:${data.callId}`);
+
     const controller = this.controllers.findById(call.controllerId);
     if (controller) {
       this.controllers.updateStatus(controller.id, 'online');
+      this.updateControllerAttachmentStatus(controller.connectionId, 'online');
       this.broadcast({ type: 'controller:updated', payload: controller });
     }
     this.sendTo(call.pilotConnectionId, { type: 'call:ended', payload: { callId: data.callId } });
@@ -200,12 +278,12 @@ export class LobbyDO extends DurableObject<Env> {
   }
 
   private handleDisconnect(meta: ConnectionMeta): void {
-    // Clean up controller
     const controller = this.controllers.findByConnectionId(meta.connectionId);
     if (controller) {
       const call = this.calls.findByController(controller.id);
       if (call) {
         this.calls.end(call.id);
+        this.ctx.storage.delete(`call:${call.id}`);
         this.sendTo(call.pilotConnectionId, { type: 'call:ended', payload: { callId: call.id, reason: 'Controller disconnected' } });
       }
       this.controllers.unregister(controller.id);
@@ -213,16 +291,29 @@ export class LobbyDO extends DurableObject<Env> {
       this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
     }
 
-    // Clean up pilot calls
     const call = this.calls.findByPilot(meta.connectionId);
     if (call) {
       const ctrl = this.controllers.findById(call.controllerId);
       if (ctrl) {
         this.controllers.updateStatus(ctrl.id, 'online');
+        this.updateControllerAttachmentStatus(ctrl.connectionId, 'online');
         this.broadcast({ type: 'controller:updated', payload: ctrl });
         this.sendTo(ctrl.connectionId, { type: 'call:ended', payload: { callId: call.id, reason: 'Pilot disconnected' } });
       }
       this.calls.end(call.id);
+      this.ctx.storage.delete(`call:${call.id}`);
+    }
+  }
+
+  /** Update the controller status in their WebSocket attachment for hibernation persistence */
+  private updateControllerAttachmentStatus(connectionId: string, status: string): void {
+    const sockets = this.ctx.getWebSockets(connectionId);
+    for (const ws of sockets) {
+      const m = ws.deserializeAttachment() as Record<string, unknown> | null;
+      if (m && m.controllerId) {
+        m.controllerStatus = status;
+        ws.serializeAttachment(m);
+      }
     }
   }
 
