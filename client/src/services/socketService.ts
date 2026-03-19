@@ -12,6 +12,7 @@ class WebSocketService {
   private reconnectDelay = 500;
   private _connectionId: string | null = null;
   private _connected = false;
+  private _connecting = false;
   private connectListeners = new Set<(connected: boolean) => void>();
 
   get connectionId(): string | null {
@@ -23,13 +24,14 @@ class WebSocketService {
   }
 
   connect(token: string): void {
-    if (this.ws && this.token === token) return;
+    if ((this.ws || this._connecting) && this.token === token) return;
     this.token = token;
     this.doConnect();
   }
 
   private async doConnect(): Promise<void> {
-    if (!this.token) return;
+    if (!this.token || this._connecting) return;
+    this._connecting = true;
     this.cleanup();
 
     // Exchange long-lived JWT for a short-lived WebSocket ticket
@@ -42,10 +44,12 @@ class WebSocketService {
       const data = await res.json() as { ticket: string };
       ticket = data.ticket;
     } catch {
+      this._connecting = false;
       this.scheduleReconnect();
       return;
     }
 
+    this._connecting = false;
     const wsUrl = SERVER_URL.replace(/^http/, 'ws') + '/ws?ticket=' + encodeURIComponent(ticket);
     this.ws = new WebSocket(wsUrl);
 
