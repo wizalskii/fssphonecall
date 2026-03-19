@@ -172,7 +172,7 @@ export default function ControllerView() {
           <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '2px solid var(--panel-edge)' }}>
             <div className="flex items-center gap-3">
               <div className="screw" />
-              <span className="lcd-text lcd-amber text-sm tracking-widest">ZLC FSS CONSOLE</span>
+              <span className="lcd-text lcd-amber text-sm tracking-widest">ZLC vFSS CONSOLE</span>
             </div>
             <div className="flex items-center gap-3">
               {isOnline && (

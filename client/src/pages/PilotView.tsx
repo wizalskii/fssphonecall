@@ -141,7 +141,7 @@ export default function PilotView() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               <div className="screw" />
-              <span className="panel-label" style={{ fontSize: '11px', letterSpacing: '0.2em' }}>FSS COMM 1</span>
+              <span className="panel-label" style={{ fontSize: '11px', letterSpacing: '0.2em' }}>vFSS COMM 1</span>
             </div>
             <div className="flex items-center gap-3">
               <button

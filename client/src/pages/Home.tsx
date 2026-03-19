@@ -12,12 +12,12 @@ export default function Home() {
         <div className="panel" style={{ border: '3px solid var(--panel-edge)', borderRadius: '4px', padding: '20px' }}>
           <div className="flex justify-between items-center mb-4">
             <div className="screw" />
-            <span className="panel-label">FSS Phone Simulator</span>
+            <span className="panel-label">vFSS Phone Simulator</span>
             <div className="screw" />
           </div>
 
           <div className="lcd-display p-4 mb-4 text-center">
-            <div className="lcd-text lcd-green text-2xl tracking-widest mb-1">FSS PHONE</div>
+            <div className="lcd-text lcd-green text-2xl tracking-widest mb-1">vFSS PHONE</div>
             <div className="lcd-text lcd-dim text-xs tracking-wider">IFR CLEARANCE DELIVERY — WEBRTC VOICE</div>
             <div className="lcd-text lcd-dim text-xs mt-2">VATSIM • ZLC ARTCC SALT LAKE CITY</div>
           </div>
@@ -43,7 +43,7 @@ export default function Home() {
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <button onClick={() => navigate('/pilot')} className="hw-btn p-4 text-center">
                   <div className="lcd-text lcd-green text-lg mb-1">PILOT</div>
-                  <div className="panel-label" style={{ fontSize: '8px' }}>CALL FSS CONTROLLERS</div>
+                  <div className="panel-label" style={{ fontSize: '8px' }}>CALL vFSS CONTROLLERS</div>
                 </button>
                 <button onClick={() => navigate('/controller')} className="hw-btn-green hw-btn p-4 text-center">
                   <div className="lcd-text lcd-amber text-lg mb-1">CONTROLLER</div>
@@ -64,7 +64,10 @@ export default function Home() {
 
           <div className="text-center mt-4 pt-3" style={{ borderTop: '1px solid var(--panel-edge)' }}>
             <span className="panel-label">ZLC ARTCC — SALT LAKE CITY</span>
-            <div className="mt-1">
+            <div className="mt-2" style={{ fontSize: '8px', color: '#555', letterSpacing: '0.05em' }}>
+              DESIGNED AND IMPROVED BY @MIGUELLINI37 AND THE ZLC (SALT LAKE ARTCC) TEAM
+            </div>
+            <div className="mt-2">
               <Link to="/privacy" className="panel-label" style={{ color: 'var(--lcd-dim)', fontSize: '8px' }}>PRIVACY POLICY</Link>
             </div>
           </div>
