@@ -7,7 +7,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@fssphone/shared': path.resolve(__dirname, '../shared/types'),
+      '@fssphone/shared': path.resolve(__dirname, '../shared/dist'),
     },
   },
 });

@@ -74,4 +74,84 @@ describe('CallManager', () => {
     expect(active).toHaveLength(1);
     expect(active[0].id).toBe(c2.id);
   });
+
+  // --- restore tests ---
+
+  it('restores a call from a saved object', () => {
+    const call = {
+      id: 'restored-call',
+      pilotConnectionId: 'p-conn',
+      pilotCid: '1234',
+      pilotCallsign: 'N999',
+      controllerId: 'ctrl-1',
+      controllerConnectionId: 'c-conn',
+      status: 'active' as const,
+      createdAt: Date.now(),
+    };
+    cm.restore(call);
+    expect(cm.findById('restored-call')).toBeDefined();
+    expect(cm.findById('restored-call')!.status).toBe('active');
+  });
+
+  it('restored call is findable by pilot and controller', () => {
+    cm.restore({
+      id: 'r-call',
+      pilotConnectionId: 'p1',
+      pilotCid: '111',
+      pilotCallsign: 'N1',
+      controllerId: 'ctrl1',
+      controllerConnectionId: 'c1',
+      status: 'ringing',
+      createdAt: Date.now(),
+    });
+    expect(cm.findByPilot('p1')).toBeDefined();
+    expect(cm.findByController('ctrl1')).toBeDefined();
+  });
+
+  it('restored call appears in getActive', () => {
+    cm.restore({
+      id: 'active-call',
+      pilotConnectionId: 'p1',
+      pilotCid: '111',
+      pilotCallsign: 'N1',
+      controllerId: 'ctrl1',
+      controllerConnectionId: 'c1',
+      status: 'active',
+      createdAt: Date.now(),
+    });
+    expect(cm.getActive()).toHaveLength(1);
+  });
+
+  it('restored call can be ended', () => {
+    cm.restore({
+      id: 'end-me',
+      pilotConnectionId: 'p1',
+      pilotCid: '111',
+      pilotCallsign: 'N1',
+      controllerId: 'ctrl1',
+      controllerConnectionId: 'c1',
+      status: 'active',
+      createdAt: Date.now(),
+    });
+    cm.end('end-me');
+    expect(cm.findById('end-me')).toBeUndefined();
+    expect(cm.getActive()).toHaveLength(0);
+  });
+
+  it('does not restore ended calls into active list', () => {
+    cm.restore({
+      id: 'ended-call',
+      pilotConnectionId: 'p1',
+      pilotCid: '111',
+      pilotCallsign: 'N1',
+      controllerId: 'ctrl1',
+      controllerConnectionId: 'c1',
+      status: 'ended',
+      createdAt: Date.now(),
+    });
+    // restore puts it in the map regardless — the lobby filters ended calls before restoring
+    // but the manager itself should still store it
+    expect(cm.findById('ended-call')).toBeDefined();
+    expect(cm.getActive()).toHaveLength(0);
+  });
 });

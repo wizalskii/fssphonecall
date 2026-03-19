@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { VatsimUser } from '@fssphone/shared';
 import type { ClientMessage, ServerMessage, WebRTCSignal, ICECandidateData } from '@fssphone/shared';
 import type { Call } from '@fssphone/shared';
+import { isValidFrequency, normalizeFrequency } from '@fssphone/shared';
 import { ControllerRegistry } from './services/ControllerRegistry';
 import { CallManager } from './services/CallManager';
 import type { Env } from './index';
@@ -159,6 +160,23 @@ export class LobbyDO extends DurableObject<Env> {
   // --- Event handlers ---
 
   private handleControllerRegister(ws: WebSocket, meta: ConnectionMeta, data: { callsign: string; frequency: string }): void {
+    if (!data.callsign.trim()) {
+      this.sendTo(meta.connectionId, { type: 'error', payload: { message: 'Callsign is required' } });
+      return;
+    }
+    if (!isValidFrequency(data.frequency)) {
+      this.sendTo(meta.connectionId, { type: 'error', payload: { message: 'Invalid VHF frequency. Must be 118.000-136.975 MHz with valid channel spacing.' } });
+      return;
+    }
+    data.frequency = normalizeFrequency(data.frequency);
+
+    // If this connection already has a controller, unregister the old one first
+    const existing = this.controllers.findByConnectionId(meta.connectionId);
+    if (existing) {
+      this.controllers.unregister(existing.id);
+      this.ctx.storage.delete(`ctrl:${existing.id}`);
+    }
+
     const controller = this.controllers.register(meta.connectionId, data, meta.user.cid, meta.user.name);
 
     // Persist controller info in the WebSocket attachment so it survives hibernation
