@@ -77,6 +77,16 @@ export default function ControllerView() {
     }
   }, [remoteStream]);
 
+  // Re-register controller on reconnect
+  const wasConnected = useRef(false);
+  useEffect(() => {
+    if (isConnected && !wasConnected.current && isOnline && callsign && frequency) {
+      // Socket reconnected while we were online — re-register
+      send({ type: 'controller:register', payload: { callsign: callsign.trim(), frequency: frequency.trim() } });
+    }
+    wasConnected.current = isConnected;
+  }, [isConnected, isOnline, callsign, frequency, send]);
+
   useEffect(() => {
     return () => {
       if (isOnline) send({ type: 'controller:unregister' });
