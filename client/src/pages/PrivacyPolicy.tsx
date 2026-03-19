@@ -26,7 +26,7 @@ export default function PrivacyPolicy() {
             <section>
               <h2 className="lcd-text lcd-amber text-base mb-2">1. Data Controller</h2>
               <p>
-                This FSS Phone Simulator ("Service") is operated by ZLC ARTCC as a VATSIM training
+                This vFSS Phone Simulator ("Service") is operated by ZLC ARTCC as a VATSIM training
                 and testing tool. For questions about this policy, contact us via the ZLC ARTCC website.
               </p>
             </section>
