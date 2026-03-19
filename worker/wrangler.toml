@@ -12,6 +12,7 @@ CLIENT_URL = "https://client.virtualfssphone.cc"
 # VATSIM_CLIENT_SECRET
 # VATSIM_REDIRECT_URI
 # JWT_SECRET
+#67
 
 [[durable_objects.bindings]]
 name = "LOBBY"
