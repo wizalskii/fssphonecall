@@ -22,7 +22,7 @@ export default function PilotView() {
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const controllerSocketIdRef = useRef<string | null>(null);
 
-  const { connectionState, remoteStream, error: webrtcError, setupWebRTC, cleanup } = useWebRTC({
+  const { connectionState, remoteStream, error: webrtcError, isTransmitting, setupWebRTC, cleanup } = useWebRTC({
     socket,
     callId: currentCall?.id || null,
     isInitiator: true
@@ -257,6 +257,10 @@ export default function PilotView() {
               <p className="text-sm text-gray-500">
                 Connection: {connectionState}
               </p>
+            </div>
+
+            <div className={`mb-4 px-4 py-3 rounded-lg text-center font-semibold ${isTransmitting ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+              {isTransmitting ? 'TRANSMITTING' : 'Hold SPACE to talk'}
             </div>
 
             <Button variant="danger" size="lg" onClick={handleHangup}>
