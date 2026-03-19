@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
@@ -107,6 +107,9 @@ export default function Home() {
           <p className="font-semibold mb-1">ZLC ARTCC - Salt Lake City ARTCC</p>
           <p>VATSIM Training & Testing Tool</p>
           <p className="mt-2 text-xs">Not affiliated with or endorsed by official VATSIM operations</p>
+          <p className="mt-3">
+            <Link to="/privacy" className="text-blue-600 hover:underline text-xs">Privacy Policy</Link>
+          </p>
         </div>
       </Card>
     </div>
