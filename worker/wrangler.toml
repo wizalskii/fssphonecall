@@ -2,6 +2,7 @@ name = "fssphone-server"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 account_id = "e4dbf5d535fc83344f8f12af566d9992"
+
 [vars]
 VATSIM_AUTH_URL = "https://auth.vatsim.net"
 CLIENT_URL = "https://client.virtualfssphone.cc"
