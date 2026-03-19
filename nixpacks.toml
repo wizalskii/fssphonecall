@@ -2,16 +2,12 @@
 nixPkgs = ['nodejs_18']
 
 [phases.install]
-cmds = [
-  'npm install --include=dev',
-  'cd shared && npm install --include=dev',
-  'cd server && npm install --include=dev'
-]
+cmds = ['npm install --include=dev']
 
 [phases.build]
 cmds = [
-  'cd shared && npm run build',
-  'cd server && npm run build'
+  'npm run build:shared',
+  'npm run build:server'
 ]
 
 [start]
