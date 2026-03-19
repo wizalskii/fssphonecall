@@ -18,9 +18,9 @@ const io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(httpSe
     origin: CLIENT_URL,
     methods: ['GET', 'POST']
   },
-  pingInterval: 10000,
-  pingTimeout: 5000,
-  transports: ['websocket']
+  pingInterval: 5000,
+  pingTimeout: 10000,
+  allowUpgrades: true
 });
 
 // Middleware
