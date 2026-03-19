@@ -15,6 +15,8 @@ export default function ControllerView() {
   const { isConnected, send, on, off } = useSocket();
 
   const [isOnline, setIsOnline] = useState(false);
+  const isOnlineRef = useRef(false);
+  isOnlineRef.current = isOnline;
   const [callsign, setCallsign] = useState('');
   const [frequency, setFrequency] = useState('');
   const [incomingCall, setIncomingCall] = useState<Call | null>(null);
@@ -81,22 +83,31 @@ export default function ControllerView() {
     }
   }, [remoteStream]);
 
-  // Re-register controller on reconnect
+  // Re-register controller and reset call state on reconnect
   const wasConnected = useRef(false);
   useEffect(() => {
-    if (isConnected && !wasConnected.current && isOnline && callsign && frequency) {
-      // Socket reconnected while we were online — re-register
-      send({ type: 'controller:register', payload: { callsign: callsign.trim(), frequency: frequency.trim() } });
+    if (isConnected && !wasConnected.current) {
+      // Reset any active call (server already cleaned up the old connection)
+      if (currentCallRef.current || incomingCallRef.current) {
+        cleanup();
+        setCurrentCall(null);
+        setIncomingCall(null);
+      }
+      // Re-register if we were online
+      if (isOnline && callsign && frequency) {
+        send({ type: 'controller:register', payload: { callsign: callsign.trim(), frequency: frequency.trim() } });
+      }
     }
     wasConnected.current = isConnected;
-  }, [isConnected, isOnline, callsign, frequency, send]);
+  }, [isConnected, isOnline, callsign, frequency, send, cleanup]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     return () => {
-      if (isOnline) send({ type: 'controller:unregister' });
+      if (isOnlineRef.current) send({ type: 'controller:unregister' });
       cleanup();
     };
-  }, [isOnline, send, cleanup]);
+  }, []);
 
   const handleGoOnline = () => {
     if (!callsign.trim() || !frequency.trim()) {

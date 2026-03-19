@@ -38,7 +38,7 @@ export function useWebRTC({ isInitiator }: UseWebRTCProps) {
     }
   }, []);
 
-  const initializePeerConnection = useCallback(async (stream: MediaStream) => {
+  const initializePeerConnection = async (stream: MediaStream) => {
     // Fetch TURN credentials from the worker
     let iceServers: RTCIceServer[] = [
       { urls: 'stun:stun.cloudflare.com:3478' },
@@ -99,7 +99,7 @@ export function useWebRTC({ isInitiator }: UseWebRTCProps) {
     }
 
     return pc;
-  }, []);
+  };
 
   const createOffer = useCallback(async (remoteId: string, callId: string) => {
     if (!peerConnection.current) return;
@@ -215,7 +215,7 @@ export function useWebRTC({ isInitiator }: UseWebRTCProps) {
     } catch (err) {
       console.error('Error setting up WebRTC:', err);
     }
-  }, [startLocalStream, initializePeerConnection, createOffer, isInitiator]);
+  }, [startLocalStream, createOffer, isInitiator]);
 
   const cleanup = useCallback(() => {
     if (localStreamRef.current) {
