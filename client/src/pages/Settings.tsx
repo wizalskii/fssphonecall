@@ -35,8 +35,10 @@ export default function Settings() {
   const [speakerTesting, setSpeakerTesting] = useState(false);
   const speakerTestRef = useRef<AudioContext | null>(null);
 
-  // Version
+  // Version & update check
   const [version, setVersion] = useState('Web');
+  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   useEffect(() => {
     if (window.electronAPI) {
@@ -174,7 +176,7 @@ export default function Settings() {
       gain.connect(ctx.destination);
 
       osc.start();
-      osc.stop(ctx.currentTime + 0.5);
+      osc.stop(ctx.currentTime + 1);
       osc.onended = () => {
         ctx.close();
         setSpeakerTesting(false);
@@ -183,6 +185,26 @@ export default function Settings() {
       setSpeakerTesting(false);
     }
   }, [speakerTesting, selectedOutput]);
+
+  // Check for updates
+  const checkForUpdate = useCallback(async () => {
+    if (checkingUpdate) return;
+    setCheckingUpdate(true);
+    setUpdateStatus(null);
+
+    try {
+      if (window.electronAPI?.checkForUpdates) {
+        const result = await window.electronAPI.checkForUpdates();
+        setUpdateStatus(result || 'UP TO DATE');
+      } else {
+        setUpdateStatus('UPDATES N/A IN BROWSER');
+      }
+    } catch {
+      setUpdateStatus('CHECK FAILED');
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }, [checkingUpdate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--console-bg)' }}>
@@ -280,6 +302,18 @@ export default function Settings() {
                 </span>
               </div>
             </div>
+            <button
+              onClick={checkForUpdate}
+              disabled={checkingUpdate}
+              className="hw-btn px-3 py-1 text-xs text-gray-400 w-full mt-2"
+            >
+              {checkingUpdate ? 'CHECKING...' : 'CHECK FOR UPDATES'}
+            </button>
+            {updateStatus && (
+              <div className="lcd-display p-2 mt-2 text-center">
+                <span className="lcd-text lcd-dim text-xs">{updateStatus}</span>
+              </div>
+            )}
           </div>
 
           {/* Back button */}
