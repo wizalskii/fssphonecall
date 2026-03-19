@@ -15,6 +15,8 @@ export default function ControllerView() {
   const { isConnected, send, on, off } = useSocket();
 
   const [isOnline, setIsOnline] = useState(false);
+  const isOnlineRef = useRef(false);
+  isOnlineRef.current = isOnline;
   const [callsign, setCallsign] = useState('');
   const [frequency, setFrequency] = useState('');
   const [incomingCall, setIncomingCall] = useState<Call | null>(null);
@@ -99,12 +101,13 @@ export default function ControllerView() {
     wasConnected.current = isConnected;
   }, [isConnected, isOnline, callsign, frequency, send, cleanup]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     return () => {
-      if (isOnline) send({ type: 'controller:unregister' });
+      if (isOnlineRef.current) send({ type: 'controller:unregister' });
       cleanup();
     };
-  }, [isOnline, send, cleanup]);
+  }, []);
 
   const handleGoOnline = () => {
     if (!callsign.trim() || !frequency.trim()) {
