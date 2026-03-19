@@ -81,15 +81,23 @@ export default function ControllerView() {
     }
   }, [remoteStream]);
 
-  // Re-register controller on reconnect
+  // Re-register controller and reset call state on reconnect
   const wasConnected = useRef(false);
   useEffect(() => {
-    if (isConnected && !wasConnected.current && isOnline && callsign && frequency) {
-      // Socket reconnected while we were online — re-register
-      send({ type: 'controller:register', payload: { callsign: callsign.trim(), frequency: frequency.trim() } });
+    if (isConnected && !wasConnected.current) {
+      // Reset any active call (server already cleaned up the old connection)
+      if (currentCallRef.current || incomingCallRef.current) {
+        cleanup();
+        setCurrentCall(null);
+        setIncomingCall(null);
+      }
+      // Re-register if we were online
+      if (isOnline && callsign && frequency) {
+        send({ type: 'controller:register', payload: { callsign: callsign.trim(), frequency: frequency.trim() } });
+      }
     }
     wasConnected.current = isConnected;
-  }, [isConnected, isOnline, callsign, frequency, send]);
+  }, [isConnected, isOnline, callsign, frequency, send, cleanup]);
 
   useEffect(() => {
     return () => {
