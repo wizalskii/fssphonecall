@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Call } from '@fssphone/shared';
+import { isValidFrequency, normalizeFrequency } from '../utils/frequency';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { useWebRTC } from '../hooks/useWebRTC';
@@ -99,7 +100,12 @@ export default function ControllerView() {
       setTimeout(() => setError(null), 3000);
       return;
     }
-    send({ type: 'controller:register', payload: { callsign: callsign.trim(), frequency: frequency.trim() } });
+    if (!isValidFrequency(frequency)) {
+      setError('Invalid frequency. Must be 118.000-136.975 MHz (25 or 8.33 kHz spacing).');
+      setTimeout(() => setError(null), 5000);
+      return;
+    }
+    send({ type: 'controller:register', payload: { callsign: callsign.trim(), frequency: normalizeFrequency(frequency.trim()) } });
     setIsOnline(true);
   };
 
