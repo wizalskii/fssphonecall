@@ -4,6 +4,7 @@ export interface Call {
   pilotCid: string;        // VATSIM CID of the pilot
   pilotCallsign: string;
   controllerId: string;
+  controllerSocketId: string;
   status: 'ringing' | 'active' | 'ended';
   createdAt: number;
 }

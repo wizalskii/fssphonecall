@@ -20,7 +20,6 @@ export default function PilotView() {
   const [error, setError] = useState<string | null>(null);
 
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
-  const controllerSocketIdRef = useRef<string | null>(null);
 
   const { connectionState, remoteStream, error: webrtcError, isTransmitting, setupWebRTC, cleanup } = useWebRTC({
     socket,
@@ -55,21 +54,15 @@ export default function PilotView() {
     socket.on('call:ringing', (call) => {
       setCurrentCall(call);
       setCallStatus('ringing');
-
-      // Find controller socket ID
-      const controller = controllers.find(c => c.id === call.controllerId);
-      if (controller) {
-        controllerSocketIdRef.current = controller.socketId;
-      }
     });
 
     socket.on('call:established', async (call) => {
       setCurrentCall(call);
       setCallStatus('active');
 
-      // Set up WebRTC with controller
-      if (controllerSocketIdRef.current) {
-        await setupWebRTC(controllerSocketIdRef.current);
+      // Set up WebRTC with controller using fresh socket ID from call
+      if (call.controllerSocketId) {
+        await setupWebRTC(call.controllerSocketId);
       }
     });
 
@@ -78,7 +71,6 @@ export default function PilotView() {
         cleanup();
         setCurrentCall(null);
         setCallStatus('idle');
-        controllerSocketIdRef.current = null;
         if (reason) {
           setError(reason);
           setTimeout(() => setError(null), 5000);

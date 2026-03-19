@@ -17,7 +17,10 @@ const io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(httpSe
   cors: {
     origin: CLIENT_URL,
     methods: ['GET', 'POST']
-  }
+  },
+  pingInterval: 10000,
+  pingTimeout: 5000,
+  transports: ['websocket']
 });
 
 // Middleware
@@ -98,7 +101,7 @@ io.on('connection', (socket) => {
       }
 
       // Create call
-      const call = callManager.create(socket.id, user.cid, data);
+      const call = callManager.create(socket.id, user.cid, controller.socketId, data);
 
       // Update controller status
       controllerRegistry.updateStatus(controller.id, 'busy');
@@ -126,10 +129,13 @@ io.on('connection', (socket) => {
         return;
       }
 
+      // Update call with current socket IDs (may have changed due to reconnect)
+      call.controllerSocketId = socket.id;
+
       // Update call status
       callManager.updateStatus(callId, 'active');
 
-      // Notify both parties
+      // Notify both parties with fresh socket IDs
       io.to(call.pilotId).emit('call:established', call);
       socket.emit('call:established', call);
 

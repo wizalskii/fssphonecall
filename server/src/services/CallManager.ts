@@ -4,13 +4,14 @@ import { v4 as uuidv4 } from 'uuid';
 export class CallManager {
   private calls: Map<string, Call> = new Map();
 
-  create(pilotId: string, pilotCid: string, data: CallInitiation): Call {
+  create(pilotId: string, pilotCid: string, controllerSocketId: string, data: CallInitiation): Call {
     const call: Call = {
       id: uuidv4(),
       pilotId,
       pilotCid,
       pilotCallsign: data.pilotCallsign,
       controllerId: data.controllerId,
+      controllerSocketId,
       status: 'ringing',
       createdAt: Date.now()
     };
