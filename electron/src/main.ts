@@ -60,9 +60,16 @@ function createWindow() {
     mainWindow = null;
   });
 
-  // Open external links in browser
+  // Open external links in browser (only allow http/https)
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        shell.openExternal(url);
+      }
+    } catch {
+      // Invalid URL — do not open
+    }
     return { action: 'deny' };
   });
 
@@ -111,6 +118,8 @@ ipcMain.handle('get-settings', () => {
 });
 
 ipcMain.handle('set-setting', (_event, key: string, value: unknown) => {
+  const allowedKeys = ['pttKey', 'audioInput', 'audioOutput'];
+  if (!allowedKeys.includes(key)) return;
   store.set(key, value);
   if (key === 'pttKey') registerPTT();
 });
@@ -133,7 +142,7 @@ app.whenReady().then(() => {
   createWindow();
 
   // Check for updates silently
-  autoUpdater.autoDownload = true;
+  autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.checkForUpdates().catch(() => {});
 

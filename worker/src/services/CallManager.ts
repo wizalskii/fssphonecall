@@ -26,6 +26,13 @@ export class CallManager {
     return this.calls.get(callId);
   }
 
+  findByConnectionId(connectionId: string): Call | undefined {
+    for (const c of this.calls.values()) {
+      if ((c.pilotConnectionId === connectionId || c.controllerConnectionId === connectionId) && c.status !== 'ended') return c;
+    }
+    return undefined;
+  }
+
   findByPilot(connectionId: string): Call | undefined {
     for (const c of this.calls.values()) {
       if (c.pilotConnectionId === connectionId && c.status !== 'ended') return c;

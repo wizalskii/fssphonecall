@@ -197,23 +197,23 @@ export default function PilotView() {
                 </div>
               </>
             )}
-            {callStatus === 'ringing' && ringTarget && (
+            {callStatus === 'ringing' && (
               <div className="ring-pulse">
                 <div className="lcd-text lcd-amber" style={{ fontSize: '28px', lineHeight: 1.2 }}>
-                  {ringTarget.frequency}
+                  {ringTarget?.frequency ?? '----.---'}
                 </div>
                 <div className="lcd-text lcd-amber" style={{ fontSize: '12px', marginTop: '4px' }}>
                   CALLING...
                 </div>
               </div>
             )}
-            {callStatus === 'active' && ringTarget && (
+            {callStatus === 'active' && (
               <>
                 <div className="lcd-text lcd-green" style={{ fontSize: '28px', lineHeight: 1.2 }}>
-                  {ringTarget.frequency}
+                  {ringTarget?.frequency ?? '----.---'}
                 </div>
                 <div className="lcd-text lcd-green" style={{ fontSize: '12px', marginTop: '4px' }}>
-                  {ringTarget.callsign}
+                  {ringTarget?.callsign ?? 'UNKNOWN'}
                 </div>
                 <div className="lcd-text lcd-green" style={{ fontSize: '10px', marginTop: '2px', opacity: 0.7 }}>
                   ON CALL

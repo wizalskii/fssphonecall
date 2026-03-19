@@ -46,12 +46,12 @@ export default {
     if (url.pathname === '/turn-credentials') {
       const authHeader = request.headers.get('Authorization');
       if (!authHeader?.startsWith('Bearer ')) {
-        return new Response('Unauthorized', { status: 401 });
+        return new Response('Unauthorized', { status: 401, headers: corsHeaders(env.CLIENT_URL) });
       }
       try {
         await verifyToken(authHeader.slice(7), env.JWT_SECRET);
       } catch {
-        return new Response('Invalid token', { status: 401 });
+        return new Response('Invalid token', { status: 401, headers: corsHeaders(env.CLIENT_URL) });
       }
 
       // Generate short-lived TURN credentials via Cloudflare Calls API
@@ -89,7 +89,7 @@ export default {
     if (url.pathname === '/ws-ticket') {
       const authHeader = request.headers.get('Authorization');
       if (!authHeader?.startsWith('Bearer ')) {
-        return new Response('Unauthorized', { status: 401 });
+        return new Response('Unauthorized', { status: 401, headers: corsHeaders(env.CLIENT_URL) });
       }
       try {
         const user = await verifyToken(authHeader.slice(7), env.JWT_SECRET);
@@ -98,7 +98,7 @@ export default {
           headers: { ...corsHeaders(env.CLIENT_URL), 'Content-Type': 'application/json' },
         });
       } catch {
-        return new Response('Invalid token', { status: 401 });
+        return new Response('Invalid token', { status: 401, headers: corsHeaders(env.CLIENT_URL) });
       }
     }
 
@@ -106,12 +106,12 @@ export default {
     if (url.pathname === '/vatsim-status') {
       const authHeader = request.headers.get('Authorization');
       if (!authHeader?.startsWith('Bearer ')) {
-        return new Response('Unauthorized', { status: 401 });
+        return new Response('Unauthorized', { status: 401, headers: corsHeaders(env.CLIENT_URL) });
       }
       try {
         await verifyToken(authHeader.slice(7), env.JWT_SECRET);
       } catch {
-        return new Response('Invalid token', { status: 401 });
+        return new Response('Invalid token', { status: 401, headers: corsHeaders(env.CLIENT_URL) });
       }
 
       const cid = url.searchParams.get('cid');
@@ -218,14 +218,14 @@ export default {
       // Authenticate short-lived WS ticket from query param
       const ticket = url.searchParams.get('ticket');
       if (!ticket) {
-        return new Response('Missing ticket', { status: 401 });
+        return new Response('Missing ticket', { status: 401, headers: corsHeaders(env.CLIENT_URL) });
       }
 
       let result;
       try {
         result = await verifyWsTicket(ticket, env.JWT_SECRET);
       } catch {
-        return new Response('Invalid or expired ticket', { status: 401 });
+        return new Response('Invalid or expired ticket', { status: 401, headers: corsHeaders(env.CLIENT_URL) });
       }
 
       // Forward to the singleton Lobby DO with user info + ticket JTI in headers

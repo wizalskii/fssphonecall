@@ -6,9 +6,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getVersion: () => ipcRenderer.invoke('get-version'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   onUpdateAvailable: (callback: (version: string) => void) => {
-    ipcRenderer.on('update-available', (_event, version) => callback(version));
+    const listener = (_event: Electron.IpcRendererEvent, version: string) => callback(version);
+    ipcRenderer.on('update-available', listener);
+    return () => { ipcRenderer.removeListener('update-available', listener); };
   },
   onUpdateDownloaded: (callback: (version: string) => void) => {
-    ipcRenderer.on('update-downloaded', (_event, version) => callback(version));
+    const listener = (_event: Electron.IpcRendererEvent, version: string) => callback(version);
+    ipcRenderer.on('update-downloaded', listener);
+    return () => { ipcRenderer.removeListener('update-downloaded', listener); };
   },
 });

@@ -24,6 +24,6 @@ nsis:
 publish:
   provider: s3
   bucket: vfss-releases
-  endpoint: https://<account-id>.r2.cloudflarestorage.com
+  endpoint: ${R2_ENDPOINT}
   region: auto
   acl: null
