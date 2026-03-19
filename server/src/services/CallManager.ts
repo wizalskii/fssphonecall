@@ -1,4 +1,4 @@
-import { Call, CallInitiation } from '@fssphone/shared';
+import type { Call, CallInitiation } from '@fssphone/shared';
 import { v4 as uuidv4 } from 'uuid';
 
 export class CallManager {

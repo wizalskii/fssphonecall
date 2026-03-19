@@ -1,6 +1,6 @@
 import { Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
-import { VatsimUser } from '@fssphone/shared';
+import type { VatsimUser } from '@fssphone/shared';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 

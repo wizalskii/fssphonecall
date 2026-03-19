@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
-import { ClientToServerEvents, ServerToClientEvents } from '@fssphone/shared';
+import type { ClientToServerEvents, ServerToClientEvents } from '@fssphone/shared';
 import { ControllerRegistry } from './services/ControllerRegistry';
 import { CallManager } from './services/CallManager';
 import { SignalingService } from './services/SignalingService';

@@ -1,5 +1,5 @@
 import { Server as SocketIOServer } from 'socket.io';
-import { WebRTCSignal, ICECandidateData } from '@fssphone/shared';
+import type { WebRTCSignal, ICECandidateData } from '@fssphone/shared';
 
 export class SignalingService {
   constructor(private io: SocketIOServer) {}
