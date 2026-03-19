@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import axios from 'axios';
 import jwt from 'jsonwebtoken';
-import { VatsimUser } from '@fssphone/shared';
+import type { VatsimUser } from '@fssphone/shared';
 
 const router = Router();
 

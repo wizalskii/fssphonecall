@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Socket } from 'socket.io-client';
-import { ClientToServerEvents, ServerToClientEvents } from '@fssphone/shared';
+import type { ClientToServerEvents, ServerToClientEvents } from '@fssphone/shared';
 import { useAuth } from '../context/AuthContext';
 import socketService from '../services/socketService';
 
