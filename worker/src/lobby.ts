@@ -1,0 +1,245 @@
+import { DurableObject } from 'cloudflare:workers';
+import type { VatsimUser } from '@fssphone/shared';
+import type { ClientMessage, ServerMessage, WebRTCSignal, ICECandidateData } from '@fssphone/shared';
+import { ControllerRegistry } from './services/ControllerRegistry';
+import { CallManager } from './services/CallManager';
+import type { Env } from './index';
+
+interface ConnectionMeta {
+  connectionId: string;
+  user: VatsimUser;
+}
+
+export class LobbyDO extends DurableObject<Env> {
+  private controllers: ControllerRegistry;
+  private calls: CallManager;
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    this.controllers = new ControllerRegistry();
+    this.calls = new CallManager();
+
+    // Auto-respond to ping without waking the DO
+    this.ctx.setWebSocketAutoResponse(
+      new WebSocketRequestResponsePair('ping', 'pong')
+    );
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+
+    const connectionId = crypto.randomUUID();
+    const user: VatsimUser = {
+      cid: request.headers.get('X-User-CID') || '',
+      name: request.headers.get('X-User-Name') || '',
+      rating: parseInt(request.headers.get('X-User-Rating') || '0'),
+      ratingShort: request.headers.get('X-User-Rating-Short') || '',
+      ratingLong: request.headers.get('X-User-Rating-Long') || '',
+    };
+
+    const meta: ConnectionMeta = { connectionId, user };
+
+    this.ctx.acceptWebSocket(server, [connectionId]);
+    server.serializeAttachment(meta);
+
+    // Send welcome + current controller list
+    server.send(JSON.stringify({ type: 'welcome', payload: { connectionId } }));
+    server.send(JSON.stringify({ type: 'controllers:list', payload: this.controllers.getAll() }));
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    if (typeof message !== 'string') return;
+
+    const meta = ws.deserializeAttachment() as ConnectionMeta | null;
+    if (!meta) return;
+
+    let msg: ClientMessage;
+    try {
+      msg = JSON.parse(message);
+    } catch {
+      return;
+    }
+
+    switch (msg.type) {
+      case 'controller:register':
+        this.handleControllerRegister(ws, meta, msg.payload!);
+        break;
+      case 'controller:unregister':
+        this.handleControllerUnregister(meta);
+        break;
+      case 'call:initiate':
+        this.handleCallInitiate(ws, meta, msg.payload!);
+        break;
+      case 'call:answer':
+        this.handleCallAnswer(ws, meta, msg.payload!);
+        break;
+      case 'call:reject':
+        this.handleCallReject(ws, msg.payload!);
+        break;
+      case 'call:hangup':
+        this.handleCallHangup(msg.payload!);
+        break;
+      case 'webrtc:offer':
+      case 'webrtc:answer':
+        this.relayWebRTC(msg.type, msg.payload as WebRTCSignal);
+        break;
+      case 'webrtc:ice-candidate':
+        this.relayICE(msg.payload as ICECandidateData);
+        break;
+    }
+  }
+
+  async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
+    const meta = ws.deserializeAttachment() as ConnectionMeta | null;
+    if (meta) {
+      this.handleDisconnect(meta);
+    }
+    ws.close(code, reason);
+  }
+
+  async webSocketError(ws: WebSocket): Promise<void> {
+    const meta = ws.deserializeAttachment() as ConnectionMeta | null;
+    if (meta) {
+      this.handleDisconnect(meta);
+    }
+    ws.close(1011, 'Unexpected error');
+  }
+
+  // --- Event handlers ---
+
+  private handleControllerRegister(ws: WebSocket, meta: ConnectionMeta, data: { callsign: string; frequency: string }): void {
+    const controller = this.controllers.register(meta.connectionId, data, meta.user.cid, meta.user.name);
+    this.sendTo(meta.connectionId, { type: 'controller:updated', payload: controller });
+    this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
+  }
+
+  private handleControllerUnregister(meta: ConnectionMeta): void {
+    const controller = this.controllers.findByConnectionId(meta.connectionId);
+    if (controller) {
+      this.controllers.unregister(controller.id);
+      this.broadcast({ type: 'controller:removed', payload: { controllerId: controller.id } });
+      this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
+    }
+  }
+
+  private handleCallInitiate(ws: WebSocket, meta: ConnectionMeta, data: { controllerId: string; pilotCallsign: string }): void {
+    const controller = this.controllers.findById(data.controllerId);
+    if (!controller) {
+      this.sendTo(meta.connectionId, { type: 'error', payload: { message: 'Controller not found' } });
+      return;
+    }
+    if (controller.status === 'busy') {
+      this.sendTo(meta.connectionId, { type: 'error', payload: { message: 'Controller is busy' } });
+      return;
+    }
+    const existing = this.calls.findByPilot(meta.connectionId);
+    if (existing) {
+      this.sendTo(meta.connectionId, { type: 'error', payload: { message: 'You already have an active call' } });
+      return;
+    }
+
+    const call = this.calls.create(meta.connectionId, meta.user.cid, controller.connectionId, data);
+    this.controllers.updateStatus(controller.id, 'busy');
+
+    this.broadcast({ type: 'controller:updated', payload: controller });
+    this.sendTo(meta.connectionId, { type: 'call:ringing', payload: call });
+    this.sendTo(controller.connectionId, { type: 'call:incoming', payload: call });
+  }
+
+  private handleCallAnswer(ws: WebSocket, meta: ConnectionMeta, data: { callId: string }): void {
+    const call = this.calls.findById(data.callId);
+    if (!call) {
+      this.sendTo(meta.connectionId, { type: 'error', payload: { message: 'Call not found' } });
+      return;
+    }
+
+    // Refresh controller's connection ID
+    call.controllerConnectionId = meta.connectionId;
+    this.calls.updateStatus(data.callId, 'active');
+
+    this.sendTo(call.pilotConnectionId, { type: 'call:established', payload: call });
+    this.sendTo(meta.connectionId, { type: 'call:established', payload: call });
+  }
+
+  private handleCallReject(ws: WebSocket, data: { callId: string }): void {
+    const call = this.calls.findById(data.callId);
+    if (!call) return;
+
+    this.calls.end(data.callId);
+    const controller = this.controllers.findById(call.controllerId);
+    if (controller) {
+      this.controllers.updateStatus(controller.id, 'online');
+      this.broadcast({ type: 'controller:updated', payload: controller });
+    }
+    this.sendTo(call.pilotConnectionId, { type: 'call:ended', payload: { callId: data.callId, reason: 'Call rejected' } });
+  }
+
+  private handleCallHangup(data: { callId: string }): void {
+    const call = this.calls.findById(data.callId);
+    if (!call) return;
+
+    this.calls.end(data.callId);
+    const controller = this.controllers.findById(call.controllerId);
+    if (controller) {
+      this.controllers.updateStatus(controller.id, 'online');
+      this.broadcast({ type: 'controller:updated', payload: controller });
+    }
+    this.sendTo(call.pilotConnectionId, { type: 'call:ended', payload: { callId: data.callId } });
+    this.sendTo(call.controllerConnectionId, { type: 'call:ended', payload: { callId: data.callId } });
+  }
+
+  private relayWebRTC(type: 'webrtc:offer' | 'webrtc:answer', data: WebRTCSignal): void {
+    this.sendTo(data.to, { type, payload: data });
+  }
+
+  private relayICE(data: ICECandidateData): void {
+    this.sendTo(data.to, { type: 'webrtc:ice-candidate', payload: data });
+  }
+
+  private handleDisconnect(meta: ConnectionMeta): void {
+    // Clean up controller
+    const controller = this.controllers.findByConnectionId(meta.connectionId);
+    if (controller) {
+      const call = this.calls.findByController(controller.id);
+      if (call) {
+        this.calls.end(call.id);
+        this.sendTo(call.pilotConnectionId, { type: 'call:ended', payload: { callId: call.id, reason: 'Controller disconnected' } });
+      }
+      this.controllers.unregister(controller.id);
+      this.broadcast({ type: 'controller:removed', payload: { controllerId: controller.id } });
+      this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
+    }
+
+    // Clean up pilot calls
+    const call = this.calls.findByPilot(meta.connectionId);
+    if (call) {
+      const ctrl = this.controllers.findById(call.controllerId);
+      if (ctrl) {
+        this.controllers.updateStatus(ctrl.id, 'online');
+        this.broadcast({ type: 'controller:updated', payload: ctrl });
+        this.sendTo(ctrl.connectionId, { type: 'call:ended', payload: { callId: call.id, reason: 'Pilot disconnected' } });
+      }
+      this.calls.end(call.id);
+    }
+  }
+
+  // --- Helpers ---
+
+  private broadcast(msg: ServerMessage): void {
+    const data = JSON.stringify(msg);
+    for (const ws of this.ctx.getWebSockets()) {
+      ws.send(data);
+    }
+  }
+
+  private sendTo(connectionId: string, msg: ServerMessage): void {
+    const sockets = this.ctx.getWebSockets(connectionId);
+    const data = JSON.stringify(msg);
+    for (const ws of sockets) {
+      ws.send(data);
+    }
+  }
+}

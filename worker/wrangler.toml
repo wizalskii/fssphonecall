@@ -1,0 +1,21 @@
+name = "fssphone-server"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[vars]
+VATSIM_AUTH_URL = "https://auth.vatsim.net"
+CLIENT_URL = "https://client.virtualfssphone.cc"
+
+# Secrets (set via `wrangler secret put`):
+# VATSIM_CLIENT_ID
+# VATSIM_CLIENT_SECRET
+# VATSIM_REDIRECT_URI
+# JWT_SECRET
+
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "LobbyDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LobbyDO"]

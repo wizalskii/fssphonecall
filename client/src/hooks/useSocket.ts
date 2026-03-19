@@ -1,38 +1,43 @@
-import { useEffect, useState } from 'react';
-import { Socket } from 'socket.io-client';
-import type { ClientToServerEvents, ServerToClientEvents } from '@fssphone/shared';
+import { useEffect, useState, useCallback } from 'react';
+import type { ClientMessage } from '@fssphone/shared';
 import { useAuth } from '../context/AuthContext';
 import socketService from '../services/socketService';
 
 export function useSocket() {
   const { token } = useAuth();
-  const [socket, setSocket] = useState<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     if (!token) {
-      setSocket(null);
+      socketService.disconnect();
       setIsConnected(false);
       return;
     }
 
-    const socketInstance = socketService.connect(token);
-    setSocket(socketInstance);
+    socketService.connect(token);
+    const unsub = socketService.onConnectionChange(setIsConnected);
+    if (socketService.isConnected) setIsConnected(true);
 
-    const handleConnect = () => setIsConnected(true);
-    const handleDisconnect = () => setIsConnected(false);
-
-    socketInstance.on('connect', handleConnect);
-    socketInstance.on('disconnect', handleDisconnect);
-
-    // If already connected (reconnect case)
-    if (socketInstance.connected) setIsConnected(true);
-
-    return () => {
-      socketInstance.off('connect', handleConnect);
-      socketInstance.off('disconnect', handleDisconnect);
-    };
+    return unsub;
   }, [token]);
 
-  return { socket, isConnected };
+  const send = useCallback((msg: ClientMessage) => {
+    socketService.send(msg);
+  }, []);
+
+  const on = useCallback((type: string, handler: (payload: unknown) => void) => {
+    socketService.on(type, handler);
+  }, []);
+
+  const off = useCallback((type: string, handler?: (payload: unknown) => void) => {
+    socketService.off(type, handler);
+  }, []);
+
+  return {
+    isConnected,
+    connectionId: socketService.connectionId,
+    send,
+    on,
+    off,
+  };
 }

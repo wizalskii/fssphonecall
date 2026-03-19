@@ -1,10 +1,10 @@
 export interface Call {
   id: string;
-  pilotId: string;
-  pilotCid: string;        // VATSIM CID of the pilot
+  pilotConnectionId: string;
+  pilotCid: string;
   pilotCallsign: string;
   controllerId: string;
-  controllerSocketId: string;
+  controllerConnectionId: string;
   status: 'ringing' | 'active' | 'ended';
   createdAt: number;
 }

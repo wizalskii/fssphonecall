@@ -1,11 +1,11 @@
 export interface Controller {
   id: string;
-  cid: string;             // VATSIM CID
-  name: string;            // VATSIM real name
-  callsign: string;        // e.g., "Seattle Radio"
-  frequency: string;       // e.g., "122.200"
+  cid: string;
+  name: string;
+  callsign: string;
+  frequency: string;
   status: 'online' | 'busy';
-  socketId: string;
+  connectionId: string;
 }
 
 export interface ControllerRegistration {

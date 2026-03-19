@@ -11,7 +11,7 @@ import StatusIndicator from '../components/common/StatusIndicator';
 export default function PilotView() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { socket, isConnected } = useSocket();
+  const { isConnected, send, on, off } = useSocket();
 
   const [controllers, setControllers] = useState<Controller[]>([]);
   const [pilotCallsign, setPilotCallsign] = useState('');
@@ -22,85 +22,72 @@ export default function PilotView() {
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
   const { connectionState, remoteStream, error: webrtcError, isTransmitting, setupWebRTC, cleanup } = useWebRTC({
-    socket,
     callId: currentCall?.id || null,
-    isInitiator: true
+    isInitiator: true,
   });
 
-  // Socket event listeners
   useEffect(() => {
-    if (!socket) return;
-
-    socket.on('controllers:list', (list) => {
-      setControllers(list);
-    });
-
-    socket.on('controller:updated', (controller) => {
+    const onControllersList = (payload: unknown) => setControllers(payload as Controller[]);
+    const onControllerUpdated = (payload: unknown) => {
+      const controller = payload as Controller;
       setControllers(prev => {
-        const index = prev.findIndex(c => c.id === controller.id);
-        if (index >= 0) {
-          const newList = [...prev];
-          newList[index] = controller;
-          return newList;
-        }
+        const idx = prev.findIndex(c => c.id === controller.id);
+        if (idx >= 0) { const n = [...prev]; n[idx] = controller; return n; }
         return [...prev, controller];
       });
-    });
-
-    socket.on('controller:removed', (controllerId) => {
+    };
+    const onControllerRemoved = (payload: unknown) => {
+      const { controllerId } = payload as { controllerId: string };
       setControllers(prev => prev.filter(c => c.id !== controllerId));
-    });
-
-    socket.on('call:ringing', (call) => {
-      setCurrentCall(call);
+    };
+    const onCallRinging = (payload: unknown) => {
+      setCurrentCall(payload as Call);
       setCallStatus('ringing');
-    });
-
-    socket.on('call:established', async (call) => {
+    };
+    const onCallEstablished = async (payload: unknown) => {
+      const call = payload as Call;
       setCurrentCall(call);
       setCallStatus('active');
-
-      // Set up WebRTC with controller using fresh socket ID from call
-      if (call.controllerSocketId) {
-        await setupWebRTC(call.controllerSocketId);
+      if (call.controllerConnectionId) {
+        await setupWebRTC(call.controllerConnectionId);
       }
-    });
-
-    socket.on('call:ended', (callId, reason) => {
+    };
+    const onCallEnded = (payload: unknown) => {
+      const { callId } = payload as { callId: string };
       if (currentCall?.id === callId) {
         cleanup();
         setCurrentCall(null);
         setCallStatus('idle');
-        if (reason) {
-          setError(reason);
-          setTimeout(() => setError(null), 5000);
-        }
       }
-    });
-
-    socket.on('error', (message) => {
-      setError(message);
+    };
+    const onError = (payload: unknown) => {
+      setError((payload as { message: string }).message);
       setTimeout(() => setError(null), 5000);
-    });
+    };
+
+    on('controllers:list', onControllersList);
+    on('controller:updated', onControllerUpdated);
+    on('controller:removed', onControllerRemoved);
+    on('call:ringing', onCallRinging);
+    on('call:established', onCallEstablished);
+    on('call:ended', onCallEnded);
+    on('error', onError);
 
     return () => {
-      socket.off('controllers:list');
-      socket.off('controller:updated');
-      socket.off('controller:removed');
-      socket.off('call:ringing');
-      socket.off('call:established');
-      socket.off('call:ended');
-      socket.off('error');
+      off('controllers:list', onControllersList);
+      off('controller:updated', onControllerUpdated);
+      off('controller:removed', onControllerRemoved);
+      off('call:ringing', onCallRinging);
+      off('call:established', onCallEstablished);
+      off('call:ended', onCallEnded);
+      off('error', onError);
     };
-  }, [socket, controllers, currentCall, setupWebRTC, cleanup]);
+  }, [on, off, currentCall, setupWebRTC, cleanup]);
 
-  // Play remote audio
   useEffect(() => {
     if (remoteStream && remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = remoteStream;
-      remoteAudioRef.current.play().catch(err => {
-        console.error('Error playing remote audio:', err);
-      });
+      remoteAudioRef.current.play().catch(err => console.error('Error playing remote audio:', err));
     }
   }, [remoteStream]);
 
@@ -110,21 +97,12 @@ export default function PilotView() {
       setTimeout(() => setError(null), 3000);
       return;
     }
-
-    if (!socket) {
-      setError('Not connected to server');
-      return;
-    }
-
-    socket.emit('call:initiate', {
-      controllerId: controller.id,
-      pilotCallsign: pilotCallsign.trim()
-    });
+    send({ type: 'call:initiate', payload: { controllerId: controller.id, pilotCallsign: pilotCallsign.trim() } });
   };
 
   const handleHangup = () => {
-    if (socket && currentCall) {
-      socket.emit('call:hangup', currentCall.id);
+    if (currentCall) {
+      send({ type: 'call:hangup', payload: { callId: currentCall.id } });
     }
   };
 
@@ -148,24 +126,13 @@ export default function PilotView() {
             </div>
             <div className="flex items-center gap-4">
               <StatusIndicator status={isConnected ? 'online' : 'offline'} />
-              <Button variant="secondary" onClick={() => navigate('/')}>
-                Exit
-              </Button>
+              <Button variant="secondary" onClick={() => navigate('/')}>Exit</Button>
             </div>
           </div>
         </div>
 
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-          </div>
-        )}
-
-        {webrtcError && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {webrtcError}
-          </div>
-        )}
+        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
+        {webrtcError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{webrtcError}</div>}
 
         {callStatus === 'idle' && (
           <>
@@ -179,34 +146,19 @@ export default function PilotView() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </Card>
-
             <Card>
-              <h2 className="text-xl font-semibold mb-4">
-                Available Controllers ({availableControllers.length})
-              </h2>
-
+              <h2 className="text-xl font-semibold mb-4">Available Controllers ({availableControllers.length})</h2>
               {availableControllers.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">
-                  No controllers online. Waiting for controllers...
-                </p>
+                <p className="text-gray-500 text-center py-8">No controllers online. Waiting for controllers...</p>
               ) : (
                 <div className="space-y-3">
                   {availableControllers.map((controller) => (
-                    <div
-                      key={controller.id}
-                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-400 transition-colors"
-                    >
+                    <div key={controller.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-400 transition-colors">
                       <div>
                         <h3 className="font-semibold text-lg">{controller.callsign}</h3>
                         <p className="text-gray-600">{controller.frequency}</p>
                       </div>
-                      <Button
-                        variant="primary"
-                        onClick={() => handleCall(controller)}
-                        disabled={!pilotCallsign.trim()}
-                      >
-                        Call
-                      </Button>
+                      <Button variant="primary" onClick={() => handleCall(controller)} disabled={!pilotCallsign.trim()}>Call</Button>
                     </div>
                   ))}
                 </div>
@@ -225,12 +177,8 @@ export default function PilotView() {
               </div>
             </div>
             <h2 className="text-2xl font-bold mb-2">Calling...</h2>
-            <p className="text-gray-600 mb-4">
-              {controllers.find(c => c.id === currentCall.controllerId)?.callsign}
-            </p>
-            <Button variant="danger" onClick={handleHangup}>
-              Cancel Call
-            </Button>
+            <p className="text-gray-600 mb-4">{controllers.find(c => c.id === currentCall.controllerId)?.callsign}</p>
+            <Button variant="danger" onClick={handleHangup}>Cancel Call</Button>
           </Card>
         )}
 
@@ -243,22 +191,13 @@ export default function PilotView() {
                 </svg>
               </div>
               <h2 className="text-2xl font-bold mb-2">Call Active</h2>
-              <p className="text-gray-600 mb-2">
-                Connected with {controllers.find(c => c.id === currentCall.controllerId)?.callsign}
-              </p>
-              <p className="text-sm text-gray-500">
-                Connection: {connectionState}
-              </p>
+              <p className="text-gray-600 mb-2">Connected with {controllers.find(c => c.id === currentCall.controllerId)?.callsign}</p>
+              <p className="text-sm text-gray-500">Connection: {connectionState}</p>
             </div>
-
             <div className={`mb-4 px-4 py-3 rounded-lg text-center font-semibold ${isTransmitting ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
               {isTransmitting ? 'TRANSMITTING' : 'Hold SPACE to talk'}
             </div>
-
-            <Button variant="danger" size="lg" onClick={handleHangup}>
-              Hang Up
-            </Button>
-
+            <Button variant="danger" size="lg" onClick={handleHangup}>Hang Up</Button>
             <audio ref={remoteAudioRef} autoPlay />
           </Card>
         )}
