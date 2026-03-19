@@ -116,10 +116,10 @@ export class LobbyDO extends DurableObject<Env> {
         this.handleCallAnswer(ws, meta, msg.payload!);
         break;
       case 'call:reject':
-        this.handleCallReject(ws, msg.payload!);
+        this.handleCallReject(meta, msg.payload!);
         break;
       case 'call:hangup':
-        this.handleCallHangup(msg.payload!);
+        this.handleCallHangup(meta, msg.payload!);
         break;
       case 'webrtc:offer':
       case 'webrtc:answer':
@@ -239,9 +239,10 @@ export class LobbyDO extends DurableObject<Env> {
     this.ctx.storage.put(`call:${call.id}`, call);
   }
 
-  private handleCallReject(ws: WebSocket, data: { callId: string }): void {
+  private handleCallReject(meta: ConnectionMeta, data: { callId: string }): void {
     const call = this.calls.findById(data.callId);
     if (!call) return;
+    if (call.controllerConnectionId !== meta.connectionId) return;
 
     this.calls.end(data.callId);
     this.ctx.storage.delete(`call:${data.callId}`);
@@ -256,9 +257,11 @@ export class LobbyDO extends DurableObject<Env> {
     this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
   }
 
-  private handleCallHangup(data: { callId: string }): void {
+  private handleCallHangup(meta: ConnectionMeta, data: { callId: string }): void {
     const call = this.calls.findById(data.callId);
     if (!call) return;
+    // Only the pilot or controller in this call can hang up
+    if (call.pilotConnectionId !== meta.connectionId && call.controllerConnectionId !== meta.connectionId) return;
 
     this.calls.end(data.callId);
     this.ctx.storage.delete(`call:${data.callId}`);

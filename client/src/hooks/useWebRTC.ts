@@ -123,6 +123,14 @@ export function useWebRTC({ isInitiator }: UseWebRTCProps) {
     }
   }, []);
 
+  const drainPendingICE = async () => {
+    const queued = pendingSignals.current.filter(s => s.type === 'ice-candidate');
+    pendingSignals.current = pendingSignals.current.filter(s => s.type !== 'ice-candidate');
+    for (const signal of queued) {
+      await processICECandidate(signal.payload as ICECandidateData);
+    }
+  };
+
   const processOffer = async (data: WebRTCSignal) => {
     if (!peerConnection.current) return;
 
@@ -140,6 +148,9 @@ export function useWebRTC({ isInitiator }: UseWebRTCProps) {
         sdp: answer,
       };
       socketService.send({ type: 'webrtc:answer', payload: response });
+
+      // Now that remote description is set, drain any buffered ICE candidates
+      await drainPendingICE();
     } catch (err) {
       console.error('Error handling offer:', err);
       setError('Failed to handle WebRTC offer');
@@ -150,6 +161,7 @@ export function useWebRTC({ isInitiator }: UseWebRTCProps) {
     if (!peerConnection.current) return;
     try {
       await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.sdp as RTCSessionDescriptionInit));
+      await drainPendingICE();
     } catch (err) {
       console.error('Error handling answer:', err);
       setError('Failed to handle WebRTC answer');
@@ -157,7 +169,10 @@ export function useWebRTC({ isInitiator }: UseWebRTCProps) {
   };
 
   const processICECandidate = async (data: ICECandidateData) => {
-    if (!peerConnection.current) return;
+    if (!peerConnection.current || !peerConnection.current.remoteDescription) {
+      pendingSignals.current.push({ type: 'ice-candidate', payload: data });
+      return;
+    }
     try {
       await peerConnection.current.addIceCandidate(new RTCIceCandidate(data.candidate as RTCIceCandidateInit));
     } catch (err) {
@@ -203,8 +218,8 @@ export function useWebRTC({ isInitiator }: UseWebRTCProps) {
   }, [startLocalStream, initializePeerConnection, createOffer, isInitiator]);
 
   const cleanup = useCallback(() => {
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
     }
     if (peerConnection.current) {
       peerConnection.current.close();
@@ -218,7 +233,7 @@ export function useWebRTC({ isInitiator }: UseWebRTCProps) {
     remoteConnectionId.current = null;
     activeCallId.current = null;
     pendingSignals.current = [];
-  }, [localStream]);
+  }, []);
 
   // Push-to-talk
   const setTransmitting = useCallback((transmit: boolean) => {

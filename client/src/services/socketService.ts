@@ -102,6 +102,7 @@ class WebSocketService {
     this.token = null;
     this._connectionId = null;
     this._connected = false;
+    this.reconnectDelay = 500;
     this.cleanup();
     this.notifyConnect(false);
   }

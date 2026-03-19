@@ -64,7 +64,7 @@ export default {
                 Authorization: `Bearer ${env.TURN_API_TOKEN}`,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({ ttl: 86400 }),
+              body: JSON.stringify({ ttl: 300 }),
             }
           );
           const creds = await res.json() as { iceServers: { username: string; credential: string } };
