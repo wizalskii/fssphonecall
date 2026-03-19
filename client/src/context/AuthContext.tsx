@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { VatsimUser } from '@fssphone/shared';
+import type { VatsimUser } from '@fssphone/shared';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 const TOKEN_KEY = 'fssphone_token';

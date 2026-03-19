@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Socket } from 'socket.io-client';
-import { ClientToServerEvents, ServerToClientEvents, WebRTCSignal, ICECandidateData } from '@fssphone/shared';
+import type { ClientToServerEvents, ServerToClientEvents, WebRTCSignal, ICECandidateData } from '@fssphone/shared';
 
 const PEER_CONFIG: RTCConfiguration = {
   iceServers: [

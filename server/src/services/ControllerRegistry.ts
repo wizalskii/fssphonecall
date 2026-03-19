@@ -1,4 +1,4 @@
-import { Controller, ControllerRegistration } from '@fssphone/shared';
+import type { Controller, ControllerRegistration } from '@fssphone/shared';
 import { v4 as uuidv4 } from 'uuid';
 
 export class ControllerRegistry {
