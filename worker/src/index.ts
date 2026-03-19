@@ -114,22 +114,23 @@ export default {
         return new Response('Missing ticket', { status: 401 });
       }
 
-      let user;
+      let result;
       try {
-        user = await verifyWsTicket(ticket, env.JWT_SECRET);
+        result = await verifyWsTicket(ticket, env.JWT_SECRET);
       } catch {
         return new Response('Invalid or expired ticket', { status: 401 });
       }
 
-      // Forward to the singleton Lobby DO with user info in headers
+      // Forward to the singleton Lobby DO with user info + ticket JTI in headers
       const id = env.LOBBY.idFromName('lobby');
       const stub = env.LOBBY.get(id);
       const headers = new Headers(request.headers);
-      headers.set('X-User-CID', user.cid);
-      headers.set('X-User-Name', user.name);
-      headers.set('X-User-Rating', String(user.rating));
-      headers.set('X-User-Rating-Short', user.ratingShort);
-      headers.set('X-User-Rating-Long', user.ratingLong);
+      headers.set('X-User-CID', result.user.cid);
+      headers.set('X-User-Name', result.user.name);
+      headers.set('X-User-Rating', String(result.user.rating));
+      headers.set('X-User-Rating-Short', result.user.ratingShort);
+      headers.set('X-User-Rating-Long', result.user.ratingLong);
+      headers.set('X-Ticket-JTI', result.jti);
       return stub.fetch(new Request(request.url, { method: request.method, headers }));
     }
 

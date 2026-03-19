@@ -66,6 +66,18 @@ export class LobbyDO extends DurableObject<Env> {
   }
 
   async fetch(request: Request): Promise<Response> {
+    // Enforce single-use WS ticket
+    const jti = request.headers.get('X-Ticket-JTI');
+    if (jti) {
+      const used = await this.ctx.storage.get<boolean>(`ticket:${jti}`);
+      if (used) {
+        return new Response('Ticket already used', { status: 401 });
+      }
+      // Mark as used, auto-expire via DO storage (cleaned up after 2 min)
+      await this.ctx.storage.put(`ticket:${jti}`, true);
+      this.ctx.storage.setAlarm(Date.now() + 120_000);
+    }
+
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
@@ -146,6 +158,14 @@ export class LobbyDO extends DurableObject<Env> {
       this.handleDisconnect(meta);
     }
     ws.close(1011, 'Unexpected error');
+  }
+
+  async alarm(): Promise<void> {
+    // Clean up expired ticket JTIs
+    const tickets = await this.ctx.storage.list({ prefix: 'ticket:' });
+    for (const key of tickets.keys()) {
+      await this.ctx.storage.delete(key);
+    }
   }
 
   // --- Event handlers ---
@@ -230,7 +250,10 @@ export class LobbyDO extends DurableObject<Env> {
       return;
     }
 
-    call.controllerConnectionId = meta.connectionId;
+    if (call.controllerConnectionId !== meta.connectionId) {
+      this.sendTo(meta.connectionId, { type: 'error', payload: { message: 'Not authorized' } });
+      return;
+    }
     this.calls.updateStatus(data.callId, 'active');
 
     this.sendTo(call.pilotConnectionId, { type: 'call:established', payload: call });

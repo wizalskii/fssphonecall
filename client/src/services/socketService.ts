@@ -100,6 +100,7 @@ class WebSocketService {
   }
 
   private cleanup(): void {
+    this._connectionId = null;
     this.reconnectDelay = 500;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
