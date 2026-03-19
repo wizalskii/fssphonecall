@@ -34,3 +34,7 @@ build/
 # OS
 Thumbs.db
 shared/types/*.js
+
+# Superpowers / internal docs
+.superpowers/
+docs/superpowers/
