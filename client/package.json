@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev:local": "vite",
     "build": "tsc && vite build",
     "start": "serve dist -s -l ${PORT:-3000}",
     "preview": "vite preview"
