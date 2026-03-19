@@ -9,7 +9,6 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "@fssphone/shared": "^1.0.0",
     "axios": "^1.13.6",
     "cors": "^2.8.5",
     "express": "^4.18.2",

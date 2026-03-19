@@ -33,3 +33,4 @@ build/
 
 # OS
 Thumbs.db
+shared/types/*.js
