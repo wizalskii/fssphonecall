@@ -223,22 +223,22 @@ body {
 /* Light theme overrides */
 [data-theme="light"] {
   --console-bg: #d8dbe0;
-  --panel-dark: #c0c4cc;
-  --panel-mid: #b0b4bc;
-  --panel-light: #a8acb4;
-  --panel-edge: #888c94;
-  --btn-face: #b0b4bc;
-  --btn-highlight: #c8ccd4;
-  --btn-shadow: #808488;
-  --label-color: #555;
+  --panel-dark: #bcc0c8;
+  --panel-mid: #acb0b8;
+  --panel-light: #a0a4ac;
+  --panel-edge: #808490;
+  --btn-face: #a8acb4;
+  --btn-highlight: #bcc0c8;
+  --btn-shadow: #707478;
+  --label-color: #333;
   --led-off: #999;
-  --lcd-dim: #4a6a30;
-  --screw-color: #888;
+  --lcd-dim: #5a8a3a;
+  --screw-color: #777;
 }
 
 [data-theme="light"] .lcd-display {
-  background: #1a2210;
-  border-color: #333;
+  background: #0e1808;
+  border-color: #2a2a2a;
 }
 
 [data-theme="light"] .panel {
@@ -248,11 +248,24 @@ body {
       0deg,
       transparent,
       transparent 2px,
-      rgba(0,0,0,0.02) 2px,
-      rgba(0,0,0,0.02) 3px
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 3px
     );
 }
 
 [data-theme="light"] body {
   background: var(--console-bg);
+}
+
+[data-theme="light"] .hw-btn {
+  color: #222;
+}
+
+[data-theme="light"] .panel-label {
+  color: #333;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+}
+
+[data-theme="light"] .screw {
+  background: radial-gradient(circle at 40% 35%, #999, #666 60%, #555);
 }
