@@ -11,7 +11,7 @@ import StatusIndicator from '../components/common/StatusIndicator';
 export default function ControllerView() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { socket, isConnected } = useSocket();
+  const { isConnected, send, on, off } = useSocket();
 
   const [isOnline, setIsOnline] = useState(false);
   const [callsign, setCallsign] = useState('');
@@ -21,92 +21,68 @@ export default function ControllerView() {
   const [error, setError] = useState<string | null>(null);
 
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
-  const pilotSocketIdRef = useRef<string | null>(null);
 
   const { connectionState, remoteStream, error: webrtcError, isTransmitting, setupWebRTC, cleanup } = useWebRTC({
-    socket,
     callId: currentCall?.id || null,
-    isInitiator: false
+    isInitiator: false,
   });
 
-  // Socket event listeners
   useEffect(() => {
-    if (!socket) return;
-
-    socket.on('call:incoming', (call) => {
+    const onCallIncoming = (payload: unknown) => {
+      const call = payload as Call;
       setIncomingCall(call);
-      pilotSocketIdRef.current = call.pilotId;
-      // Play ringing sound
-      playRingingSound();
-    });
-
-    socket.on('call:established', async (call) => {
+    };
+    const onCallEstablished = async (payload: unknown) => {
+      const call = payload as Call;
       setCurrentCall(call);
       setIncomingCall(null);
-      stopRingingSound();
-
-      // Set up WebRTC with pilot
-      if (pilotSocketIdRef.current) {
-        await setupWebRTC(pilotSocketIdRef.current);
+      if (call.pilotConnectionId) {
+        await setupWebRTC(call.pilotConnectionId);
       }
-    });
-
-    socket.on('call:ended', (callId, reason) => {
+    };
+    const onCallEnded = (payload: unknown) => {
+      const { callId, reason } = payload as { callId: string; reason?: string };
       if (currentCall?.id === callId || incomingCall?.id === callId) {
         cleanup();
         setCurrentCall(null);
         setIncomingCall(null);
-        pilotSocketIdRef.current = null;
-        stopRingingSound();
         if (reason) {
           setError(reason);
           setTimeout(() => setError(null), 5000);
         }
       }
-    });
-
-    socket.on('error', (message) => {
-      setError(message);
+    };
+    const onError = (payload: unknown) => {
+      setError((payload as { message: string }).message);
       setTimeout(() => setError(null), 5000);
-    });
+    };
+
+    on('call:incoming', onCallIncoming);
+    on('call:established', onCallEstablished);
+    on('call:ended', onCallEnded);
+    on('error', onError);
 
     return () => {
-      socket.off('call:incoming');
-      socket.off('call:established');
-      socket.off('call:ended');
-      socket.off('error');
+      off('call:incoming', onCallIncoming);
+      off('call:established', onCallEstablished);
+      off('call:ended', onCallEnded);
+      off('error', onError);
     };
-  }, [socket, currentCall, incomingCall, setupWebRTC, cleanup]);
+  }, [on, off, currentCall, incomingCall, setupWebRTC, cleanup]);
 
-  // Play remote audio
   useEffect(() => {
     if (remoteStream && remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = remoteStream;
-      remoteAudioRef.current.play().catch(err => {
-        console.error('Error playing remote audio:', err);
-      });
+      remoteAudioRef.current.play().catch(err => console.error('Error playing remote audio:', err));
     }
   }, [remoteStream]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (isOnline && socket) {
-        socket.emit('controller:unregister');
-      }
+      if (isOnline) send({ type: 'controller:unregister' });
       cleanup();
     };
-  }, [isOnline, socket, cleanup]);
-
-  const playRingingSound = () => {
-    // TODO: Add actual ringing sound
-    console.log('Playing ringing sound');
-  };
-
-  const stopRingingSound = () => {
-    // TODO: Stop ringing sound
-    console.log('Stopping ringing sound');
-  };
+  }, [isOnline, send, cleanup]);
 
   const handleGoOnline = () => {
     if (!callsign.trim() || !frequency.trim()) {
@@ -114,46 +90,28 @@ export default function ControllerView() {
       setTimeout(() => setError(null), 3000);
       return;
     }
-
-    if (!socket) {
-      setError('Not connected to server');
-      return;
-    }
-
-    socket.emit('controller:register', {
-      callsign: callsign.trim(),
-      frequency: frequency.trim()
-    });
-
+    send({ type: 'controller:register', payload: { callsign: callsign.trim(), frequency: frequency.trim() } });
     setIsOnline(true);
   };
 
   const handleGoOffline = () => {
-    if (socket) {
-      socket.emit('controller:unregister');
-    }
+    send({ type: 'controller:unregister' });
     setIsOnline(false);
   };
 
   const handleAnswerCall = () => {
-    if (socket && incomingCall) {
-      socket.emit('call:answer', incomingCall.id);
-    }
+    if (incomingCall) send({ type: 'call:answer', payload: { callId: incomingCall.id } });
   };
 
   const handleRejectCall = () => {
-    if (socket && incomingCall) {
-      socket.emit('call:reject', incomingCall.id);
+    if (incomingCall) {
+      send({ type: 'call:reject', payload: { callId: incomingCall.id } });
       setIncomingCall(null);
-      pilotSocketIdRef.current = null;
-      stopRingingSound();
     }
   };
 
   const handleHangup = () => {
-    if (socket && currentCall) {
-      socket.emit('call:hangup', currentCall.id);
-    }
+    if (currentCall) send({ type: 'call:hangup', payload: { callId: currentCall.id } });
   };
 
   return (
@@ -174,64 +132,27 @@ export default function ControllerView() {
             </div>
             <div className="flex items-center gap-4">
               <StatusIndicator status={isConnected ? (isOnline ? 'online' : 'offline') : 'offline'} />
-              <Button variant="secondary" onClick={() => navigate('/')}>
-                Exit
-              </Button>
+              <Button variant="secondary" onClick={() => navigate('/')}>Exit</Button>
             </div>
           </div>
         </div>
 
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-          </div>
-        )}
-
-        {webrtcError && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {webrtcError}
-          </div>
-        )}
+        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
+        {webrtcError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{webrtcError}</div>}
 
         {!isOnline ? (
           <Card>
             <h2 className="text-xl font-semibold mb-4">Go Online</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Callsign
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g., Seattle Radio"
-                  value={callsign}
-                  onChange={(e) => setCallsign(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-2">Callsign</label>
+                <input type="text" placeholder="e.g., Seattle Radio" value={callsign} onChange={(e) => setCallsign(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Frequency
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g., 122.200"
-                  value={frequency}
-                  onChange={(e) => setFrequency(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-2">Frequency</label>
+                <input type="text" placeholder="e.g., 122.200" value={frequency} onChange={(e) => setFrequency(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
-
-              <Button
-                variant="success"
-                size="lg"
-                className="w-full"
-                onClick={handleGoOnline}
-                disabled={!isConnected}
-              >
-                Go Online
-              </Button>
+              <Button variant="success" size="lg" className="w-full" onClick={handleGoOnline} disabled={!isConnected}>Go Online</Button>
             </div>
           </Card>
         ) : (
@@ -244,9 +165,7 @@ export default function ControllerView() {
                 </div>
                 <div className="flex items-center gap-4">
                   <StatusIndicator status={currentCall ? 'busy' : 'online'} />
-                  <Button variant="danger" onClick={handleGoOffline}>
-                    Go Offline
-                  </Button>
+                  <Button variant="danger" onClick={handleGoOffline}>Go Offline</Button>
                 </div>
               </div>
             </Card>
@@ -261,14 +180,9 @@ export default function ControllerView() {
                   </div>
                   <h2 className="text-2xl font-bold mb-2">Incoming Call</h2>
                   <p className="text-gray-600 mb-6">{incomingCall.pilotCallsign}</p>
-
                   <div className="flex gap-4 justify-center">
-                    <Button variant="success" size="lg" onClick={handleAnswerCall}>
-                      Answer
-                    </Button>
-                    <Button variant="danger" size="lg" onClick={handleRejectCall}>
-                      Reject
-                    </Button>
+                    <Button variant="success" size="lg" onClick={handleAnswerCall}>Answer</Button>
+                    <Button variant="danger" size="lg" onClick={handleRejectCall}>Reject</Button>
                   </div>
                 </div>
               </Card>
@@ -283,22 +197,13 @@ export default function ControllerView() {
                     </svg>
                   </div>
                   <h2 className="text-2xl font-bold mb-2">Call Active</h2>
-                  <p className="text-gray-600 mb-2">
-                    Connected with {currentCall.pilotCallsign}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Connection: {connectionState}
-                  </p>
+                  <p className="text-gray-600 mb-2">Connected with {currentCall.pilotCallsign}</p>
+                  <p className="text-sm text-gray-500">Connection: {connectionState}</p>
                 </div>
-
                 <div className={`mb-4 px-4 py-3 rounded-lg text-center font-semibold ${isTransmitting ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
                   {isTransmitting ? 'TRANSMITTING' : 'Hold SPACE to talk'}
                 </div>
-
-                <Button variant="danger" size="lg" onClick={handleHangup}>
-                  Hang Up
-                </Button>
-
+                <Button variant="danger" size="lg" onClick={handleHangup}>Hang Up</Button>
                 <audio ref={remoteAudioRef} autoPlay />
               </Card>
             )}

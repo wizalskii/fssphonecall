@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Socket } from 'socket.io-client';
-import type { ClientToServerEvents, ServerToClientEvents, WebRTCSignal, ICECandidateData } from '@fssphone/shared';
+import type { WebRTCSignal, ICECandidateData } from '@fssphone/shared';
+import socketService from '../services/socketService';
 
 const PEER_CONFIG: RTCConfiguration = {
   iceServers: [
@@ -8,24 +8,23 @@ const PEER_CONFIG: RTCConfiguration = {
     {
       urls: 'turn:turn.cloudflare.com:3478?transport=udp',
       username: import.meta.env.VITE_TURN_USERNAME || '',
-      credential: import.meta.env.VITE_TURN_CREDENTIAL || ''
+      credential: import.meta.env.VITE_TURN_CREDENTIAL || '',
     },
     {
       urls: 'turns:turn.cloudflare.com:5349?transport=tcp',
       username: import.meta.env.VITE_TURN_USERNAME || '',
-      credential: import.meta.env.VITE_TURN_CREDENTIAL || ''
-    }
+      credential: import.meta.env.VITE_TURN_CREDENTIAL || '',
+    },
   ],
-  iceCandidatePoolSize: 10
+  iceCandidatePoolSize: 10,
 };
 
 interface UseWebRTCProps {
-  socket: Socket<ServerToClientEvents, ClientToServerEvents> | null;
   callId: string | null;
   isInitiator: boolean;
 }
 
-export function useWebRTC({ socket, callId, isInitiator }: UseWebRTCProps) {
+export function useWebRTC({ callId, isInitiator }: UseWebRTCProps) {
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>('new');
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -33,21 +32,15 @@ export function useWebRTC({ socket, callId, isInitiator }: UseWebRTCProps) {
   const [isTransmitting, setIsTransmitting] = useState(false);
 
   const peerConnection = useRef<RTCPeerConnection | null>(null);
-  const remoteSocketId = useRef<string | null>(null);
+  const remoteConnectionId = useRef<string | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
 
-  // Get microphone access
   const startLocalStream = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
-        video: false
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false,
       });
-      // Start muted (PTT off)
       stream.getAudioTracks().forEach(track => { track.enabled = false; });
       setLocalStream(stream);
       localStreamRef.current = stream;
@@ -59,53 +52,41 @@ export function useWebRTC({ socket, callId, isInitiator }: UseWebRTCProps) {
     }
   }, []);
 
-  // Initialize peer connection
   const initializePeerConnection = useCallback((stream: MediaStream) => {
     const pc = new RTCPeerConnection(PEER_CONFIG);
 
-    // Add local tracks to peer connection
     stream.getTracks().forEach(track => {
       pc.addTrack(track, stream);
     });
 
-    // Handle remote stream
     pc.ontrack = (event) => {
-      console.log('Received remote track');
       setRemoteStream(event.streams[0]);
     };
 
-    // Handle ICE candidates
     pc.onicecandidate = (event) => {
-      if (event.candidate && socket && callId && remoteSocketId.current) {
+      if (event.candidate && callId && remoteConnectionId.current) {
         const data: ICECandidateData = {
           callId,
-          from: socket.id!,
-          to: remoteSocketId.current,
-          candidate: event.candidate.toJSON()
+          from: socketService.connectionId!,
+          to: remoteConnectionId.current,
+          candidate: event.candidate.toJSON(),
         };
-        socket.emit('webrtc:ice-candidate', data);
+        socketService.send({ type: 'webrtc:ice-candidate', payload: data });
       }
     };
 
-    // Handle connection state changes
     pc.onconnectionstatechange = () => {
-      console.log('Connection state:', pc.connectionState);
       setConnectionState(pc.connectionState);
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      console.log('ICE connection state:', pc.iceConnectionState);
     };
 
     peerConnection.current = pc;
     return pc;
-  }, [socket, callId]);
+  }, [callId]);
 
-  // Create and send offer (initiator/pilot)
   const createOffer = useCallback(async (remoteId: string) => {
-    if (!socket || !callId || !peerConnection.current) return;
+    if (!callId || !peerConnection.current) return;
 
-    remoteSocketId.current = remoteId;
+    remoteConnectionId.current = remoteId;
 
     try {
       const offer = await peerConnection.current.createOffer();
@@ -113,70 +94,68 @@ export function useWebRTC({ socket, callId, isInitiator }: UseWebRTCProps) {
 
       const data: WebRTCSignal = {
         callId,
-        from: socket.id!,
+        from: socketService.connectionId!,
         to: remoteId,
-        sdp: offer
+        sdp: offer,
       };
-      socket.emit('webrtc:offer', data);
+      socketService.send({ type: 'webrtc:offer', payload: data });
     } catch (err) {
       console.error('Error creating offer:', err);
       setError('Failed to create WebRTC offer');
     }
-  }, [socket, callId]);
+  }, [callId]);
 
-  // Handle received offer and create answer (controller)
-  const handleOffer = useCallback(async (data: WebRTCSignal) => {
-    if (!socket || !peerConnection.current) return;
+  const handleOffer = useCallback(async (payload: unknown) => {
+    const data = payload as WebRTCSignal;
+    if (!peerConnection.current) return;
 
-    remoteSocketId.current = data.from;
+    remoteConnectionId.current = data.from;
 
     try {
-      await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.sdp as RTCSessionDescriptionInit));
       const answer = await peerConnection.current.createAnswer();
       await peerConnection.current.setLocalDescription(answer);
 
-      const responseData: WebRTCSignal = {
+      const response: WebRTCSignal = {
         callId: data.callId,
-        from: socket.id!,
+        from: socketService.connectionId!,
         to: data.from,
-        sdp: answer
+        sdp: answer,
       };
-      socket.emit('webrtc:answer', responseData);
+      socketService.send({ type: 'webrtc:answer', payload: response });
     } catch (err) {
       console.error('Error handling offer:', err);
       setError('Failed to handle WebRTC offer');
     }
-  }, [socket]);
+  }, []);
 
-  // Handle received answer (pilot)
-  const handleAnswer = useCallback(async (data: WebRTCSignal) => {
+  const handleAnswer = useCallback(async (payload: unknown) => {
+    const data = payload as WebRTCSignal;
     if (!peerConnection.current) return;
 
     try {
-      await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.sdp as RTCSessionDescriptionInit));
     } catch (err) {
       console.error('Error handling answer:', err);
       setError('Failed to handle WebRTC answer');
     }
   }, []);
 
-  // Handle ICE candidate
-  const handleICECandidate = useCallback(async (data: ICECandidateData) => {
+  const handleICECandidate = useCallback(async (payload: unknown) => {
+    const data = payload as ICECandidateData;
     if (!peerConnection.current) return;
 
     try {
-      await peerConnection.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+      await peerConnection.current.addIceCandidate(new RTCIceCandidate(data.candidate as RTCIceCandidateInit));
     } catch (err) {
       console.error('Error adding ICE candidate:', err);
     }
   }, []);
 
-  // Setup WebRTC (called when call is established)
   const setupWebRTC = useCallback(async (remoteId: string) => {
     try {
       const stream = await startLocalStream();
       initializePeerConnection(stream);
-
       if (isInitiator) {
         await createOffer(remoteId);
       }
@@ -185,7 +164,6 @@ export function useWebRTC({ socket, callId, isInitiator }: UseWebRTCProps) {
     }
   }, [startLocalStream, initializePeerConnection, createOffer, isInitiator]);
 
-  // Cleanup
   const cleanup = useCallback(() => {
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
@@ -199,10 +177,10 @@ export function useWebRTC({ socket, callId, isInitiator }: UseWebRTCProps) {
     setRemoteStream(null);
     setConnectionState('closed');
     setIsTransmitting(false);
-    remoteSocketId.current = null;
+    remoteConnectionId.current = null;
   }, [localStream]);
 
-  // Push-to-talk: spacebar
+  // Push-to-talk
   const setTransmitting = useCallback((transmit: boolean) => {
     if (localStreamRef.current) {
       localStreamRef.current.getAudioTracks().forEach(track => { track.enabled = transmit; });
@@ -223,7 +201,6 @@ export function useWebRTC({ socket, callId, isInitiator }: UseWebRTCProps) {
         setTransmitting(false);
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     return () => {
@@ -232,20 +209,18 @@ export function useWebRTC({ socket, callId, isInitiator }: UseWebRTCProps) {
     };
   }, [setTransmitting]);
 
-  // Listen for WebRTC signals from socket
+  // Listen for WebRTC signals
   useEffect(() => {
-    if (!socket) return;
-
-    socket.on('webrtc:offer', handleOffer);
-    socket.on('webrtc:answer', handleAnswer);
-    socket.on('webrtc:ice-candidate', handleICECandidate);
+    socketService.on('webrtc:offer', handleOffer);
+    socketService.on('webrtc:answer', handleAnswer);
+    socketService.on('webrtc:ice-candidate', handleICECandidate);
 
     return () => {
-      socket.off('webrtc:offer', handleOffer);
-      socket.off('webrtc:answer', handleAnswer);
-      socket.off('webrtc:ice-candidate', handleICECandidate);
+      socketService.off('webrtc:offer', handleOffer);
+      socketService.off('webrtc:answer', handleAnswer);
+      socketService.off('webrtc:ice-candidate', handleICECandidate);
     };
-  }, [socket, handleOffer, handleAnswer, handleICECandidate]);
+  }, [handleOffer, handleAnswer, handleICECandidate]);
 
   return {
     connectionState,
@@ -255,6 +230,6 @@ export function useWebRTC({ socket, callId, isInitiator }: UseWebRTCProps) {
     isTransmitting,
     setTransmitting,
     setupWebRTC,
-    cleanup
+    cleanup,
   };
 }

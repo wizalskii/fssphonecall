@@ -5,19 +5,16 @@
   "private": true,
   "workspaces": [
     "client",
-    "server",
+    "worker",
     "shared"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:server": "cd server && npm run dev",
-    "dev:client": "cd client && npm run dev:local",
-    "build": "npm run build:shared && npm run build:server && npm run build:client",
+    "dev": "concurrently \"cd worker && npm run dev\" \"cd client && npm run dev:local\"",
+    "build": "cd shared && npm run build && cd ../client && npm run build",
     "build:shared": "cd shared && npm run build",
-    "build:server": "cd server && npm run build",
     "build:client": "cd client && npm run build",
-    "start": "cd server && npm start",
-    "install:all": "npm install && cd client && npm install && cd ../server && npm install && cd ../shared && npm install"
+    "deploy:worker": "cd worker && npm run deploy",
+    "type-check:worker": "cd worker && npm run type-check"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
