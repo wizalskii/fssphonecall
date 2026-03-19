@@ -13,10 +13,11 @@ export interface Env {
   CLIENT_URL: string;
   TURN_KEY_ID: string;
   TURN_API_TOKEN: string;
+  REQUIRE_VATSIM_CONNECTION: string;
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     // CORS preflight
@@ -98,6 +99,112 @@ export default {
         });
       } catch {
         return new Response('Invalid token', { status: 401 });
+      }
+    }
+
+    // VATSIM online status lookup
+    if (url.pathname === '/vatsim-status') {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      try {
+        await verifyToken(authHeader.slice(7), env.JWT_SECRET);
+      } catch {
+        return new Response('Invalid token', { status: 401 });
+      }
+
+      const cid = url.searchParams.get('cid');
+      if (!cid) {
+        return new Response(JSON.stringify({ error: 'Missing cid parameter' }), {
+          status: 400,
+          headers: { ...corsHeaders(env.CLIENT_URL), 'Content-Type': 'application/json' },
+        });
+      }
+
+      const cidNumber = Number(cid);
+      if (Number.isNaN(cidNumber)) {
+        return new Response(JSON.stringify({ error: 'Invalid cid parameter' }), {
+          status: 400,
+          headers: { ...corsHeaders(env.CLIENT_URL), 'Content-Type': 'application/json' },
+        });
+      }
+
+      try {
+        const cache = caches.default;
+        const cacheKey = new Request('https://data.vatsim.net/v3/vatsim-data.json');
+        let dataRes = await cache.match(cacheKey);
+        if (!dataRes) {
+          dataRes = await fetch('https://data.vatsim.net/v3/vatsim-data.json');
+          const cached = new Response(dataRes.body, dataRes);
+          cached.headers.set('Cache-Control', 'public, max-age=15');
+          ctx.waitUntil(cache.put(cacheKey, cached.clone()));
+          dataRes = cached;
+        }
+
+        const data = await dataRes.json() as {
+          pilots: { cid: number; callsign: string }[];
+          controllers: { cid: number; callsign: string; frequency: string; facility: number }[];
+          atis: { cid: number; callsign: string; frequency: string }[];
+        };
+
+        // Search pilots
+        const pilot = data.pilots.find((p) => p.cid === cidNumber);
+        if (pilot) {
+          return new Response(JSON.stringify({
+            online: true,
+            type: 'pilot',
+            callsign: pilot.callsign,
+            frequency: null,
+            requireConnection: env.REQUIRE_VATSIM_CONNECTION === 'true',
+          }), {
+            headers: { ...corsHeaders(env.CLIENT_URL), 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Search controllers
+        const controller = data.controllers.find((c) => c.cid === cidNumber);
+        if (controller) {
+          return new Response(JSON.stringify({
+            online: true,
+            type: 'controller',
+            callsign: controller.callsign,
+            frequency: controller.frequency,
+            requireConnection: env.REQUIRE_VATSIM_CONNECTION === 'true',
+          }), {
+            headers: { ...corsHeaders(env.CLIENT_URL), 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Search ATIS
+        const atis = data.atis.find((a) => a.cid === cidNumber);
+        if (atis) {
+          return new Response(JSON.stringify({
+            online: true,
+            type: 'atis',
+            callsign: atis.callsign,
+            frequency: atis.frequency,
+            requireConnection: env.REQUIRE_VATSIM_CONNECTION === 'true',
+          }), {
+            headers: { ...corsHeaders(env.CLIENT_URL), 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Not found online
+        return new Response(JSON.stringify({
+          online: false,
+          type: null,
+          callsign: null,
+          frequency: null,
+          requireConnection: env.REQUIRE_VATSIM_CONNECTION === 'true',
+        }), {
+          headers: { ...corsHeaders(env.CLIENT_URL), 'Content-Type': 'application/json' },
+        });
+      } catch {
+        return new Response(JSON.stringify({ error: 'Failed to fetch VATSIM data' }), {
+          status: 502,
+          headers: { ...corsHeaders(env.CLIENT_URL), 'Content-Type': 'application/json' },
+        });
       }
     }
 
