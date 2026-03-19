@@ -1,17 +1,221 @@
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Oxanium:wght@400;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --lcd-green: #39ff14;
+  --lcd-amber: #ffbf00;
+  --lcd-red: #ff3333;
+  --lcd-dim: #1a3a0a;
+  --panel-dark: #1a1d21;
+  --panel-mid: #252830;
+  --panel-light: #2f323a;
+  --panel-edge: #3a3d45;
+  --screw-color: #555860;
+  --label-color: #8a8d95;
+  --console-bg: #0d0f12;
+  --led-green: #00e676;
+  --led-red: #ff1744;
+  --led-amber: #ffc400;
+  --led-off: #2a2a2a;
+  --btn-face: #3a3d45;
+  --btn-highlight: #4a4d55;
+  --btn-shadow: #15171a;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Oxanium', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  @apply bg-gray-50;
+  background: var(--console-bg);
+  color: #c0c0c0;
 }
 
 #root {
   min-height: 100vh;
+}
+
+/* LCD segment display font */
+.lcd-text {
+  font-family: 'Share Tech Mono', monospace;
+  text-shadow: 0 0 8px currentColor, 0 0 20px currentColor;
+}
+
+.lcd-green { color: var(--lcd-green); }
+.lcd-amber { color: var(--lcd-amber); }
+.lcd-red { color: var(--lcd-red); }
+.lcd-dim { color: var(--lcd-dim); }
+
+/* Panel texture */
+.panel {
+  background: var(--panel-dark);
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255,255,255,0.008) 2px,
+      rgba(255,255,255,0.008) 3px
+    );
+}
+
+/* Recessed LCD display */
+.lcd-display {
+  background: #0a0f04;
+  border: 2px solid #111;
+  box-shadow:
+    inset 0 2px 8px rgba(0,0,0,0.8),
+    inset 0 0 20px rgba(0,0,0,0.5),
+    0 1px 0 rgba(255,255,255,0.05);
+}
+
+/* Hardware button */
+.hw-btn {
+  background: linear-gradient(180deg, var(--btn-highlight) 0%, var(--btn-face) 40%, var(--btn-shadow) 100%);
+  border: 1px solid #222;
+  box-shadow:
+    0 3px 6px rgba(0,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.1);
+  transition: all 0.08s ease;
+  font-family: 'Oxanium', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hw-btn:active {
+  background: linear-gradient(180deg, var(--btn-shadow) 0%, var(--btn-face) 60%, var(--btn-highlight) 100%);
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.5),
+    inset 0 2px 4px rgba(0,0,0,0.3);
+  transform: translateY(1px);
+}
+
+.hw-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.hw-btn-green {
+  background: linear-gradient(180deg, #2d8a4e 0%, #1b6b35 40%, #0f4020 100%);
+  border-color: #0a2a12;
+}
+.hw-btn-green:active {
+  background: linear-gradient(180deg, #0f4020 0%, #1b6b35 60%, #2d8a4e 100%);
+}
+
+.hw-btn-red {
+  background: linear-gradient(180deg, #8a2d2d 0%, #6b1b1b 40%, #401010 100%);
+  border-color: #2a0a0a;
+}
+.hw-btn-red:active {
+  background: linear-gradient(180deg, #401010 0%, #6b1b1b 60%, #8a2d2d 100%);
+}
+
+/* LED indicator */
+.led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.5);
+}
+
+.led-on-green {
+  background: var(--led-green);
+  box-shadow: 0 0 6px var(--led-green), 0 0 12px var(--led-green);
+}
+
+.led-on-red {
+  background: var(--led-red);
+  box-shadow: 0 0 6px var(--led-red), 0 0 12px var(--led-red);
+}
+
+.led-on-amber {
+  background: var(--led-amber);
+  box-shadow: 0 0 6px var(--led-amber), 0 0 12px var(--led-amber);
+}
+
+.led-off {
+  background: var(--led-off);
+}
+
+/* Screw head */
+.screw {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #777, #444 60%, #333);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.05);
+  position: relative;
+}
+.screw::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(25deg);
+  width: 8px;
+  height: 1.5px;
+  background: #222;
+  box-shadow: 0 0 1px rgba(0,0,0,0.8);
+}
+
+/* Panel label engraving */
+.panel-label {
+  font-family: 'Oxanium', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--label-color);
+  text-shadow: 0 -1px 0 rgba(0,0,0,0.5);
+}
+
+/* Signal bars */
+.signal-bar {
+  width: 4px;
+  background: var(--lcd-green);
+  box-shadow: 0 0 4px var(--lcd-green);
+}
+.signal-bar-off {
+  background: var(--lcd-dim);
+  box-shadow: none;
+}
+
+/* Pulsing animation for ringing */
+@keyframes ring-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.ring-pulse {
+  animation: ring-pulse 1s ease-in-out infinite;
+}
+
+/* PTT active glow */
+@keyframes ptt-glow {
+  0%, 100% { box-shadow: 0 0 10px var(--lcd-red), 0 0 30px rgba(255,51,51,0.3); }
+  50% { box-shadow: 0 0 15px var(--lcd-red), 0 0 40px rgba(255,51,51,0.5); }
+}
+.ptt-active {
+  animation: ptt-glow 0.8s ease-in-out infinite;
+}
+
+/* Input styling for panel */
+.panel-input {
+  background: #0a0f04;
+  border: 2px solid #222;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);
+  color: var(--lcd-green);
+  font-family: 'Share Tech Mono', monospace;
+  caret-color: var(--lcd-green);
+}
+.panel-input::placeholder {
+  color: var(--lcd-dim);
+}
+.panel-input:focus {
+  outline: none;
+  border-color: #333;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.6), 0 0 4px rgba(57,255,20,0.15);
 }

@@ -4,9 +4,6 @@ import type { Controller, Call } from '@fssphone/shared';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { useWebRTC } from '../hooks/useWebRTC';
-import Card from '../components/common/Card';
-import Button from '../components/common/Button';
-import StatusIndicator from '../components/common/StatusIndicator';
 
 export default function PilotView() {
   const navigate = useNavigate();
@@ -18,6 +15,7 @@ export default function PilotView() {
   const [currentCall, setCurrentCall] = useState<Call | null>(null);
   const [callStatus, setCallStatus] = useState<'idle' | 'ringing' | 'active'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState(0);
 
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const currentCallRef = useRef<Call | null>(null);
@@ -103,6 +101,8 @@ export default function PilotView() {
     }
   }, [remoteStream]);
 
+  useEffect(() => { setSelectedIdx(0); }, [controllers.length]);
+
   const handleCall = (controller: Controller) => {
     if (!pilotCallsign.trim()) {
       setError('Please enter your callsign');
@@ -120,100 +120,256 @@ export default function PilotView() {
 
   const availableControllers = controllers.filter(c => c.status === 'online');
 
+  const selectedController = availableControllers[selectedIdx] ?? null;
+  const ringTarget = currentCall ? controllers.find(c => c.id === currentCall.controllerId) : null;
+
   return (
-    <div className="min-h-screen p-4 bg-gradient-to-br from-blue-50 to-gray-100">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-sm text-blue-600 font-semibold mb-1">
-                <span>VATSIM</span>
-                <span>•</span>
-                <span>ZLC ARTCC</span>
-                <span>•</span>
-                <span className="text-red-600">BETA</span>
-              </div>
-              <h1 className="text-3xl font-bold">Pilot - FSS Phone</h1>
-              {user && <p className="text-sm text-gray-500">{user.name} (CID {user.cid})</p>}
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--console-bg)' }}>
+      <div style={{ width: '100%', maxWidth: '380px' }}>
+        <div className="panel" style={{ border: '3px solid var(--panel-edge)', borderRadius: '4px', padding: '16px' }}>
+
+          {/* ── Header row: screws + label + exit ── */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="screw" />
+              <span className="panel-label" style={{ fontSize: '11px', letterSpacing: '0.2em' }}>FSS COMM 1</span>
             </div>
-            <div className="flex items-center gap-4">
-              <StatusIndicator status={isConnected ? 'online' : 'offline'} />
-              <Button variant="secondary" onClick={() => navigate('/')}>Exit</Button>
+            <div className="flex items-center gap-3">
+              <button
+                className="hw-btn"
+                style={{ padding: '2px 8px', fontSize: '9px', color: 'var(--label-color)' }}
+                onClick={() => navigate('/')}
+              >
+                EXIT
+              </button>
+              <div className="screw" />
             </div>
           </div>
-        </div>
 
-        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
-        {webrtcError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{webrtcError}</div>}
+          {/* ── User info ── */}
+          {user && (
+            <div className="panel-label mb-3" style={{ textAlign: 'center' }}>
+              {user.name} &middot; CID {user.cid}
+            </div>
+          )}
 
-        {callStatus === 'idle' && (
-          <>
-            <Card className="mb-6">
-              <h2 className="text-xl font-semibold mb-4">Your Callsign</h2>
+          {/* ── Callsign input (idle only) ── */}
+          {callStatus === 'idle' && (
+            <div className="lcd-display mb-3" style={{ padding: '8px', borderRadius: '2px' }}>
               <input
                 type="text"
-                placeholder="e.g., N12345"
+                placeholder="ENTER CALLSIGN"
                 value={pilotCallsign}
-                onChange={(e) => setPilotCallsign(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => setPilotCallsign(e.target.value.toUpperCase())}
+                className="panel-input w-full"
+                style={{ padding: '6px 8px', fontSize: '14px', borderRadius: '2px' }}
               />
-            </Card>
-            <Card>
-              <h2 className="text-xl font-semibold mb-4">Available Controllers ({availableControllers.length})</h2>
+            </div>
+          )}
+
+          {/* ── Main LCD frequency display ── */}
+          <div className="lcd-display mb-3" style={{ padding: '12px', borderRadius: '2px', textAlign: 'center' }}>
+            {callStatus === 'idle' && (
+              <>
+                <div className={`lcd-text ${selectedController ? 'lcd-green' : 'lcd-dim'}`} style={{ fontSize: '28px', lineHeight: 1.2 }}>
+                  {selectedController ? selectedController.frequency : '----.---'}
+                </div>
+                <div className={`lcd-text ${selectedController ? 'lcd-green' : 'lcd-dim'}`} style={{ fontSize: '12px', marginTop: '4px' }}>
+                  {selectedController ? selectedController.callsign : 'NO SIGNAL'}
+                </div>
+              </>
+            )}
+            {callStatus === 'ringing' && ringTarget && (
+              <div className="ring-pulse">
+                <div className="lcd-text lcd-amber" style={{ fontSize: '28px', lineHeight: 1.2 }}>
+                  {ringTarget.frequency}
+                </div>
+                <div className="lcd-text lcd-amber" style={{ fontSize: '12px', marginTop: '4px' }}>
+                  CALLING...
+                </div>
+              </div>
+            )}
+            {callStatus === 'active' && ringTarget && (
+              <>
+                <div className="lcd-text lcd-green" style={{ fontSize: '28px', lineHeight: 1.2 }}>
+                  {ringTarget.frequency}
+                </div>
+                <div className="lcd-text lcd-green" style={{ fontSize: '12px', marginTop: '4px' }}>
+                  {ringTarget.callsign}
+                </div>
+                <div className="lcd-text lcd-green" style={{ fontSize: '10px', marginTop: '2px', opacity: 0.7 }}>
+                  ON CALL
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* ── Station list (idle only) ── */}
+          {callStatus === 'idle' && (
+            <div className="lcd-display mb-3" style={{ padding: '8px', borderRadius: '2px' }}>
               {availableControllers.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">No controllers online. Waiting for controllers...</p>
+                <div className="lcd-text lcd-dim" style={{ fontSize: '11px', textAlign: 'center', padding: '8px 0' }}>
+                  NO STATIONS ONLINE
+                </div>
               ) : (
-                <div className="space-y-3">
-                  {availableControllers.map((controller) => (
-                    <div key={controller.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-400 transition-colors">
-                      <div>
-                        <h3 className="font-semibold text-lg">{controller.callsign}</h3>
-                        <p className="text-gray-600">{controller.frequency}</p>
-                      </div>
-                      <Button variant="primary" onClick={() => handleCall(controller)} disabled={!pilotCallsign.trim()}>Call</Button>
+                <>
+                  {selectedIdx > 0 && (
+                    <div className="lcd-text lcd-dim" style={{ fontSize: '9px', textAlign: 'center', marginBottom: '2px' }}>
+                      ▲
+                    </div>
+                  )}
+                  <div className="panel-label" style={{ fontSize: '8px', textAlign: 'center', marginBottom: '4px' }}>
+                    STATIONS ONLINE
+                  </div>
+                  {availableControllers.map((ctrl, i) => (
+                    <div
+                      key={ctrl.id}
+                      className={`lcd-text ${i === selectedIdx ? 'lcd-green' : 'lcd-dim'}`}
+                      style={{
+                        fontSize: '12px',
+                        padding: '2px 4px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => setSelectedIdx(i)}
+                    >
+                      <span>{i === selectedIdx ? '►' : '\u00A0'} {ctrl.callsign}</span>
+                      <span>{ctrl.frequency}</span>
                     </div>
                   ))}
-                </div>
+                  {selectedIdx < availableControllers.length - 1 && (
+                    <div className="lcd-text lcd-dim" style={{ fontSize: '9px', textAlign: 'center', marginTop: '2px' }}>
+                      ▼
+                    </div>
+                  )}
+                  <div className="lcd-text lcd-dim" style={{ fontSize: '9px', textAlign: 'center', marginTop: '4px' }}>
+                    {availableControllers.length} STATION{availableControllers.length !== 1 ? 'S' : ''}
+                  </div>
+                </>
               )}
-            </Card>
-          </>
-        )}
+            </div>
+          )}
 
-        {callStatus === 'ringing' && currentCall && (
-          <Card className="text-center">
-            <div className="animate-pulse mb-4">
-              <div className="w-20 h-20 bg-blue-500 rounded-full mx-auto flex items-center justify-center">
-                <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
-                </svg>
+          {/* ── Signal bars + connection LED ── */}
+          <div className="flex items-end gap-1 mb-3" style={{ padding: '4px 0' }}>
+            {[6, 10, 14, 18, 22].map((h, i) => (
+              <div
+                key={i}
+                className={isConnected && i < 3 ? 'signal-bar' : 'signal-bar-off'}
+                style={{ height: `${h}px`, width: '3px', borderRadius: '1px' }}
+              />
+            ))}
+            <div className="flex items-center gap-2 ml-2">
+              <div
+                className="led"
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: isConnected ? 'var(--led-green)' : 'var(--led-off)',
+                  boxShadow: isConnected ? '0 0 6px var(--led-green)' : 'none',
+                }}
+              />
+              <span className="panel-label" style={{ fontSize: '9px' }}>
+                {isConnected ? (connectionState === 'connected' ? 'CONNECTED' : connectionState.toUpperCase()) : 'OFFLINE'}
+              </span>
+            </div>
+          </div>
+
+          {/* ── Error line ── */}
+          {(error || webrtcError) && (
+            <div className="lcd-display mb-3" style={{ padding: '6px 8px', borderRadius: '2px' }}>
+              <div className="lcd-text lcd-red" style={{ fontSize: '10px' }}>
+                {error || webrtcError}
               </div>
             </div>
-            <h2 className="text-2xl font-bold mb-2">Calling...</h2>
-            <p className="text-gray-600 mb-4">{controllers.find(c => c.id === currentCall.controllerId)?.callsign}</p>
-            <Button variant="danger" onClick={handleHangup}>Cancel Call</Button>
-          </Card>
-        )}
+          )}
 
-        {callStatus === 'active' && currentCall && (
-          <Card className="text-center">
-            <div className="mb-4">
-              <div className="w-20 h-20 bg-green-500 rounded-full mx-auto flex items-center justify-center mb-4">
-                <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-bold mb-2">Call Active</h2>
-              <p className="text-gray-600 mb-2">Connected with {controllers.find(c => c.id === currentCall.controllerId)?.callsign}</p>
-              <p className="text-sm text-gray-500">Connection: {connectionState}</p>
+          {/* ── Control buttons ── */}
+          <div className="flex gap-2 mb-3">
+            {callStatus === 'idle' && (
+              <>
+                <button
+                  className="hw-btn flex-1"
+                  style={{ padding: '8px', fontSize: '11px', color: 'var(--label-color)' }}
+                  disabled={availableControllers.length === 0}
+                  onClick={() => setSelectedIdx(i => (i > 0 ? i - 1 : i))}
+                >
+                  ▲
+                </button>
+                <button
+                  className="hw-btn flex-1"
+                  style={{ padding: '8px', fontSize: '11px', color: 'var(--label-color)' }}
+                  disabled={availableControllers.length === 0}
+                  onClick={() => setSelectedIdx(i => (i < availableControllers.length - 1 ? i + 1 : i))}
+                >
+                  ▼
+                </button>
+                <button
+                  className="hw-btn hw-btn-green flex-1"
+                  style={{ padding: '8px', fontSize: '11px', color: '#ccc' }}
+                  disabled={!pilotCallsign.trim() || !selectedController}
+                  onClick={() => selectedController && handleCall(selectedController)}
+                >
+                  CALL
+                </button>
+                <button
+                  className="hw-btn hw-btn-red flex-1"
+                  style={{ padding: '8px', fontSize: '11px', color: '#ccc' }}
+                  disabled
+                >
+                  END
+                </button>
+              </>
+            )}
+            {callStatus === 'ringing' && (
+              <button
+                className="hw-btn hw-btn-red flex-1"
+                style={{ padding: '8px', fontSize: '11px', color: '#ccc' }}
+                onClick={handleHangup}
+              >
+                CANCEL
+              </button>
+            )}
+            {callStatus === 'active' && (
+              <button
+                className="hw-btn hw-btn-red flex-1"
+                style={{ padding: '8px', fontSize: '11px', color: '#ccc' }}
+                onClick={handleHangup}
+              >
+                HANGUP
+              </button>
+            )}
+          </div>
+
+          {/* ── PTT bar (active call only) ── */}
+          {callStatus === 'active' && (
+            <div
+              className={`lcd-display lcd-text mb-3 ${isTransmitting ? 'ptt-active lcd-red' : 'lcd-dim'}`}
+              style={{
+                padding: '10px',
+                borderRadius: '2px',
+                textAlign: 'center',
+                fontSize: '12px',
+                letterSpacing: '0.1em',
+              }}
+            >
+              {isTransmitting ? 'TRANSMITTING' : 'HOLD [SPACE] TO TRANSMIT'}
             </div>
-            <div className={`mb-4 px-4 py-3 rounded-lg text-center font-semibold ${isTransmitting ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-              {isTransmitting ? 'TRANSMITTING' : 'Hold SPACE to talk'}
-            </div>
-            <Button variant="danger" size="lg" onClick={handleHangup}>Hang Up</Button>
-            <audio ref={remoteAudioRef} autoPlay />
-          </Card>
-        )}
+          )}
+
+          {/* ── Bottom screws ── */}
+          <div className="flex justify-between mt-2">
+            <div className="screw" />
+            <div className="screw" />
+          </div>
+
+        </div>
       </div>
+
+      {/* Hidden audio element */}
+      <audio ref={remoteAudioRef} autoPlay style={{ display: 'none' }} />
     </div>
   );
 }
