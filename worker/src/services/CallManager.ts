@@ -18,6 +18,10 @@ export class CallManager {
     return call;
   }
 
+  restore(call: Call): void {
+    this.calls.set(call.id, call);
+  }
+
   findById(callId: string): Call | undefined {
     return this.calls.get(callId);
   }
