@@ -2,24 +2,35 @@
 let audioCtx: AudioContext | null = null;
 let ringInterval: ReturnType<typeof setInterval> | null = null;
 
-function playRingBurst() {
+function getCtx(): AudioContext {
   if (!audioCtx) audioCtx = new AudioContext();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
 
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
+function playRingBurst() {
+  const ctx = getCtx();
+
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
 
   osc.type = 'sine';
-  osc.frequency.setValueAtTime(440, audioCtx.currentTime);
-  osc.frequency.setValueAtTime(480, audioCtx.currentTime + 0.15);
+  osc.frequency.setValueAtTime(440, ctx.currentTime);
+  osc.frequency.setValueAtTime(480, ctx.currentTime + 0.15);
 
-  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+  gain.gain.setValueAtTime(0.15, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
 
   osc.connect(gain);
-  gain.connect(audioCtx.destination);
+  gain.connect(ctx.destination);
+
+  osc.onended = () => {
+    osc.disconnect();
+    gain.disconnect();
+  };
 
   osc.start();
-  osc.stop(audioCtx.currentTime + 0.3);
+  osc.stop(ctx.currentTime + 0.3);
 }
 
 export function startRinging() {
@@ -32,5 +43,9 @@ export function stopRinging() {
   if (ringInterval) {
     clearInterval(ringInterval);
     ringInterval = null;
+  }
+  if (audioCtx) {
+    audioCtx.close();
+    audioCtx = null;
   }
 }

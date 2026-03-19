@@ -1,0 +1,26 @@
+{
+  "name": "vfss-phone",
+  "version": "1.0.0",
+  "description": "vFSS Phone Simulator — Desktop Client",
+  "main": "dist/main.js",
+  "author": "ZLC ARTCC",
+  "license": "MIT",
+  "scripts": {
+    "dev": "tsc && electron .",
+    "build": "tsc",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac"
+  },
+  "dependencies": {
+    "electron-store": "^10.0.0",
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.3.3"
+  }
+}
