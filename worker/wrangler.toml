@@ -12,6 +12,7 @@ invocation_logs = true
 [vars]
 VATSIM_AUTH_URL = "https://auth.vatsim.net"
 CLIENT_URL = "https://client.virtualfssphone.cc"
+REQUIRE_VATSIM_CONNECTION = "false"
 
 # Secrets (set via `wrangler secret put`):
 # VATSIM_CLIENT_ID

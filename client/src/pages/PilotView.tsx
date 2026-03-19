@@ -4,11 +4,13 @@ import type { Controller, Call } from '@fssphone/shared';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { useWebRTC } from '../hooks/useWebRTC';
+import { useVatsimStatus } from '../hooks/useVatsimStatus';
 
 export default function PilotView() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isConnected, send, on, off } = useSocket();
+  const { status } = useVatsimStatus();
 
   const [controllers, setControllers] = useState<Controller[]>([]);
   const [pilotCallsign, setPilotCallsign] = useState('');
@@ -103,6 +105,13 @@ export default function PilotView() {
 
   useEffect(() => { setSelectedIdx(0); }, [controllers.length]);
 
+  // Auto-populate callsign from VATSIM network status
+  useEffect(() => {
+    if (status?.online && status.callsign && !pilotCallsign) {
+      setPilotCallsign(status.callsign);
+    }
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleCall = (controller: Controller) => {
     if (!pilotCallsign.trim()) {
       setError('Please enter your callsign');
@@ -150,6 +159,15 @@ export default function PilotView() {
           {user && (
             <div className="panel-label mb-3" style={{ textAlign: 'center' }}>
               {user.name} &middot; CID {user.cid}
+            </div>
+          )}
+
+          {/* ── VATSIM connection warning ── */}
+          {status?.requireConnection && !status?.online && (
+            <div className="lcd-display mb-3" style={{ padding: '6px 8px', borderRadius: '2px' }}>
+              <div className="lcd-text lcd-red" style={{ fontSize: '10px', textAlign: 'center' }}>
+                NOT CONNECTED TO VATSIM NETWORK
+              </div>
             </div>
           )}
 
