@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import Home from './pages/Home';
 import PilotView from './pages/PilotView';
 import ControllerView from './pages/ControllerView';
@@ -10,6 +11,7 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 function App() {
   return (
     <AuthProvider>
+      <ThemeProvider>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
@@ -21,6 +23,7 @@ function App() {
           <ProtectedRoute><ControllerView /></ProtectedRoute>
         } />
       </Routes>
+      </ThemeProvider>
     </AuthProvider>
   );
 }

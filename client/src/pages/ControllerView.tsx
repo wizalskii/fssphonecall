@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Call } from '@fssphone/shared';
 import { isValidFrequency, normalizeFrequency } from '../utils/frequency';
+import { startRinging, stopRinging } from '../utils/ringSound';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { useWebRTC } from '../hooks/useWebRTC';
@@ -34,6 +35,7 @@ export default function ControllerView() {
     const onCallIncoming = (payload: unknown) => {
       const call = payload as Call;
       setIncomingCall(call);
+      startRinging();
     };
     const onCallEstablished = async (payload: unknown) => {
       const call = payload as Call;
@@ -46,6 +48,7 @@ export default function ControllerView() {
     const onCallEnded = (payload: unknown) => {
       const { callId, reason } = payload as { callId: string; reason?: string };
       if (currentCallRef.current?.id === callId || incomingCallRef.current?.id === callId) {
+        stopRinging();
         cleanup();
         setCurrentCall(null);
         setIncomingCall(null);
@@ -102,6 +105,7 @@ export default function ControllerView() {
   useEffect(() => {
     return () => {
       if (isOnlineRef.current) send({ type: 'controller:unregister' });
+      stopRinging();
       cleanup();
     };
   }, []);
@@ -127,11 +131,15 @@ export default function ControllerView() {
   };
 
   const handleAnswerCall = () => {
-    if (incomingCall) send({ type: 'call:answer', payload: { callId: incomingCall.id } });
+    if (incomingCall) {
+      stopRinging();
+      send({ type: 'call:answer', payload: { callId: incomingCall.id } });
+    }
   };
 
   const handleRejectCall = () => {
     if (incomingCall) {
+      stopRinging();
       send({ type: 'call:reject', payload: { callId: incomingCall.id } });
       setIncomingCall(null);
     }
@@ -344,6 +352,9 @@ export default function ControllerView() {
                   >
                     OFF
                   </button>
+                </div>
+                <div className="text-center mt-3" style={{ fontSize: '7px', color: '#555', letterSpacing: '0.05em' }}>
+                  DESIGNED AND IMPROVED BY @MIGUELLINI37 AND THE ZLC (SALT LAKE ARTCC) TEAM
                 </div>
               </>
             )}
