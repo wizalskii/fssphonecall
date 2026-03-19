@@ -1,10 +1,12 @@
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import BetaDisclaimer from '../components/common/BetaDisclaimer';
 
 export default function Home() {
   const navigate = useNavigate();
   const { user, isLoading, login, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--console-bg)' }}>
@@ -12,7 +14,12 @@ export default function Home() {
         <div className="panel" style={{ border: '3px solid var(--panel-edge)', borderRadius: '4px', padding: '20px' }}>
           <div className="flex justify-between items-center mb-4">
             <div className="screw" />
-            <span className="panel-label">vFSS Phone Simulator</span>
+            <div className="flex items-center gap-2">
+              <span className="panel-label">vFSS Phone Simulator</span>
+              <button onClick={toggleTheme} className="hw-btn px-2 py-1 text-xs text-gray-400" title="Toggle theme">
+                {theme === 'dark' ? '\u2600' : '\u263E'}
+              </button>
+            </div>
             <div className="screw" />
           </div>
 

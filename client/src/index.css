@@ -8,20 +8,20 @@
   --lcd-green: #39ff14;
   --lcd-amber: #ffbf00;
   --lcd-red: #ff3333;
-  --lcd-dim: #1a3a0a;
-  --panel-dark: #1a1d21;
-  --panel-mid: #252830;
-  --panel-light: #2f323a;
-  --panel-edge: #3a3d45;
+  --lcd-dim: #243a12;
+  --panel-dark: #22252b;
+  --panel-mid: #2d3038;
+  --panel-light: #373a42;
+  --panel-edge: #444750;
   --screw-color: #555860;
-  --label-color: #8a8d95;
+  --label-color: #9a9da5;
   --console-bg: #0d0f12;
   --led-green: #00e676;
   --led-red: #ff1744;
   --led-amber: #ffc400;
-  --led-off: #2a2a2a;
-  --btn-face: #3a3d45;
-  --btn-highlight: #4a4d55;
+  --led-off: #333;
+  --btn-face: #444750;
+  --btn-highlight: #555860;
   --btn-shadow: #15171a;
 }
 
@@ -218,4 +218,41 @@ body {
   outline: none;
   border-color: #333;
   box-shadow: inset 0 2px 6px rgba(0,0,0,0.6), 0 0 4px rgba(57,255,20,0.15);
+}
+
+/* Light theme overrides */
+[data-theme="light"] {
+  --console-bg: #d8dbe0;
+  --panel-dark: #c0c4cc;
+  --panel-mid: #b0b4bc;
+  --panel-light: #a8acb4;
+  --panel-edge: #888c94;
+  --btn-face: #b0b4bc;
+  --btn-highlight: #c8ccd4;
+  --btn-shadow: #808488;
+  --label-color: #555;
+  --led-off: #999;
+  --lcd-dim: #4a6a30;
+  --screw-color: #888;
+}
+
+[data-theme="light"] .lcd-display {
+  background: #1a2210;
+  border-color: #333;
+}
+
+[data-theme="light"] .panel {
+  background: var(--panel-dark);
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.02) 2px,
+      rgba(0,0,0,0.02) 3px
+    );
+}
+
+[data-theme="light"] body {
+  background: var(--console-bg);
 }

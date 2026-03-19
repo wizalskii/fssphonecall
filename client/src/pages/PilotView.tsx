@@ -377,6 +377,10 @@ export default function PilotView() {
             </div>
           )}
 
+          <div className="text-center mt-3" style={{ fontSize: '7px', color: '#555', letterSpacing: '0.05em' }}>
+            DESIGNED AND IMPROVED BY @MIGUELLINI37 AND THE ZLC (SALT LAKE ARTCC) TEAM
+          </div>
+
           {/* ── Bottom screws ── */}
           <div className="flex justify-between mt-2">
             <div className="screw" />
