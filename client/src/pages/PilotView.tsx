@@ -20,6 +20,8 @@ export default function PilotView() {
   const [error, setError] = useState<string | null>(null);
 
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const currentCallRef = useRef<Call | null>(null);
+  currentCallRef.current = currentCall;
 
   const { connectionState, remoteStream, error: webrtcError, isTransmitting, setupWebRTC, cleanup } = useWebRTC({
     isInitiator: true,
@@ -53,7 +55,7 @@ export default function PilotView() {
     };
     const onCallEnded = (payload: unknown) => {
       const { callId } = payload as { callId: string };
-      if (currentCall?.id === callId) {
+      if (currentCallRef.current?.id === callId) {
         cleanup();
         setCurrentCall(null);
         setCallStatus('idle');
@@ -81,7 +83,18 @@ export default function PilotView() {
       off('call:ended', onCallEnded);
       off('error', onError);
     };
-  }, [on, off, currentCall, setupWebRTC, cleanup]);
+  }, [on, off, setupWebRTC, cleanup]);
+
+  // Reset call state on reconnect (server already cleaned up the old call)
+  const wasConnected = useRef(false);
+  useEffect(() => {
+    if (isConnected && !wasConnected.current && currentCallRef.current) {
+      cleanup();
+      setCurrentCall(null);
+      setCallStatus('idle');
+    }
+    wasConnected.current = isConnected;
+  }, [isConnected, cleanup]);
 
   useEffect(() => {
     if (remoteStream && remoteAudioRef.current) {

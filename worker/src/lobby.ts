@@ -116,10 +116,10 @@ export class LobbyDO extends DurableObject<Env> {
         this.handleCallAnswer(ws, meta, msg.payload!);
         break;
       case 'call:reject':
-        this.handleCallReject(ws, msg.payload!);
+        this.handleCallReject(meta, msg.payload!);
         break;
       case 'call:hangup':
-        this.handleCallHangup(msg.payload!);
+        this.handleCallHangup(meta, msg.payload!);
         break;
       case 'webrtc:offer':
       case 'webrtc:answer':
@@ -239,9 +239,10 @@ export class LobbyDO extends DurableObject<Env> {
     this.ctx.storage.put(`call:${call.id}`, call);
   }
 
-  private handleCallReject(ws: WebSocket, data: { callId: string }): void {
+  private handleCallReject(meta: ConnectionMeta, data: { callId: string }): void {
     const call = this.calls.findById(data.callId);
     if (!call) return;
+    if (call.controllerConnectionId !== meta.connectionId) return;
 
     this.calls.end(data.callId);
     this.ctx.storage.delete(`call:${data.callId}`);
@@ -253,11 +254,14 @@ export class LobbyDO extends DurableObject<Env> {
       this.broadcast({ type: 'controller:updated', payload: controller });
     }
     this.sendTo(call.pilotConnectionId, { type: 'call:ended', payload: { callId: data.callId, reason: 'Call rejected' } });
+    this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
   }
 
-  private handleCallHangup(data: { callId: string }): void {
+  private handleCallHangup(meta: ConnectionMeta, data: { callId: string }): void {
     const call = this.calls.findById(data.callId);
     if (!call) return;
+    // Only the pilot or controller in this call can hang up
+    if (call.pilotConnectionId !== meta.connectionId && call.controllerConnectionId !== meta.connectionId) return;
 
     this.calls.end(data.callId);
     this.ctx.storage.delete(`call:${data.callId}`);
@@ -266,10 +270,12 @@ export class LobbyDO extends DurableObject<Env> {
     if (controller) {
       this.controllers.updateStatus(controller.id, 'online');
       this.ctx.storage.put(`ctrl:${controller.id}`, controller);
-      this.broadcast({ type: 'controller:updated', payload: controller });
     }
+
     this.sendTo(call.pilotConnectionId, { type: 'call:ended', payload: { callId: data.callId } });
     this.sendTo(call.controllerConnectionId, { type: 'call:ended', payload: { callId: data.callId } });
+    // Broadcast fresh controller list so all clients have accurate state
+    this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
   }
 
   private relayWebRTC(type: 'webrtc:offer' | 'webrtc:answer', data: WebRTCSignal): void {
@@ -306,6 +312,7 @@ export class LobbyDO extends DurableObject<Env> {
       }
       this.calls.end(call.id);
       this.ctx.storage.delete(`call:${call.id}`);
+      this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
     }
   }
 

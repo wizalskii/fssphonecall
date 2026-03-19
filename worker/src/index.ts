@@ -1,6 +1,6 @@
 import { handleAuthVatsim, handleAuthCallback, handleAuthMe } from './auth';
 import { handleCors, corsHeaders } from './utils/cors';
-import { verifyToken } from './utils/jwt';
+import { verifyToken, signWsTicket, verifyWsTicket } from './utils/jwt';
 export { LobbyDO } from './lobby';
 
 export interface Env {
@@ -64,7 +64,7 @@ export default {
                 Authorization: `Bearer ${env.TURN_API_TOKEN}`,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({ ttl: 86400 }),
+              body: JSON.stringify({ ttl: 300 }),
             }
           );
           const creds = await res.json() as { iceServers: { username: string; credential: string } };
@@ -84,6 +84,23 @@ export default {
       });
     }
 
+    // Exchange long-lived JWT for a short-lived WebSocket ticket
+    if (url.pathname === '/ws-ticket') {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      try {
+        const user = await verifyToken(authHeader.slice(7), env.JWT_SECRET);
+        const ticket = await signWsTicket(user, env.JWT_SECRET);
+        return new Response(JSON.stringify({ ticket }), {
+          headers: { ...corsHeaders(env.CLIENT_URL), 'Content-Type': 'application/json' },
+        });
+      } catch {
+        return new Response('Invalid token', { status: 401 });
+      }
+    }
+
     // WebSocket upgrade -> Durable Object
     if (url.pathname === '/ws') {
       const upgradeHeader = request.headers.get('Upgrade');
@@ -91,17 +108,17 @@ export default {
         return new Response('Expected Upgrade: websocket', { status: 426 });
       }
 
-      // Authenticate JWT from query param
-      const token = url.searchParams.get('token');
-      if (!token) {
-        return new Response('Missing token', { status: 401 });
+      // Authenticate short-lived WS ticket from query param
+      const ticket = url.searchParams.get('ticket');
+      if (!ticket) {
+        return new Response('Missing ticket', { status: 401 });
       }
 
       let user;
       try {
-        user = await verifyToken(token, env.JWT_SECRET);
+        user = await verifyWsTicket(ticket, env.JWT_SECRET);
       } catch {
-        return new Response('Invalid token', { status: 401 });
+        return new Response('Invalid or expired ticket', { status: 401 });
       }
 
       // Forward to the singleton Lobby DO with user info in headers

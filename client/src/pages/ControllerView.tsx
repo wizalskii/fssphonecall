@@ -22,6 +22,10 @@ export default function ControllerView() {
   const [error, setError] = useState<string | null>(null);
 
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const currentCallRef = useRef<Call | null>(null);
+  const incomingCallRef = useRef<Call | null>(null);
+  currentCallRef.current = currentCall;
+  incomingCallRef.current = incomingCall;
 
   const { connectionState, remoteStream, error: webrtcError, isTransmitting, setupWebRTC, cleanup } = useWebRTC({
     isInitiator: false,
@@ -42,7 +46,7 @@ export default function ControllerView() {
     };
     const onCallEnded = (payload: unknown) => {
       const { callId, reason } = payload as { callId: string; reason?: string };
-      if (currentCall?.id === callId || incomingCall?.id === callId) {
+      if (currentCallRef.current?.id === callId || incomingCallRef.current?.id === callId) {
         cleanup();
         setCurrentCall(null);
         setIncomingCall(null);
@@ -68,7 +72,7 @@ export default function ControllerView() {
       off('call:ended', onCallEnded);
       off('error', onError);
     };
-  }, [on, off, currentCall, incomingCall, setupWebRTC, cleanup]);
+  }, [on, off, setupWebRTC, cleanup]);
 
   useEffect(() => {
     if (remoteStream && remoteAudioRef.current) {
