@@ -229,14 +229,19 @@ export function useWebRTC({ isInitiator }: UseWebRTCProps) {
   }, []);
 
   useEffect(() => {
+    const isInputFocused = () => {
+      const tag = document.activeElement?.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !e.repeat && localStreamRef.current) {
+      if (e.code === 'Space' && !e.repeat && localStreamRef.current && !isInputFocused()) {
         e.preventDefault();
         setTransmitting(true);
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && localStreamRef.current) {
+      if (e.code === 'Space' && !isInputFocused()) {
         e.preventDefault();
         setTransmitting(false);
       }

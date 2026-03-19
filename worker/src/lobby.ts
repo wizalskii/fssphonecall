@@ -253,6 +253,7 @@ export class LobbyDO extends DurableObject<Env> {
       this.broadcast({ type: 'controller:updated', payload: controller });
     }
     this.sendTo(call.pilotConnectionId, { type: 'call:ended', payload: { callId: data.callId, reason: 'Call rejected' } });
+    this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
   }
 
   private handleCallHangup(data: { callId: string }): void {
@@ -266,10 +267,12 @@ export class LobbyDO extends DurableObject<Env> {
     if (controller) {
       this.controllers.updateStatus(controller.id, 'online');
       this.ctx.storage.put(`ctrl:${controller.id}`, controller);
-      this.broadcast({ type: 'controller:updated', payload: controller });
     }
+
     this.sendTo(call.pilotConnectionId, { type: 'call:ended', payload: { callId: data.callId } });
     this.sendTo(call.controllerConnectionId, { type: 'call:ended', payload: { callId: data.callId } });
+    // Broadcast fresh controller list so all clients have accurate state
+    this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
   }
 
   private relayWebRTC(type: 'webrtc:offer' | 'webrtc:answer', data: WebRTCSignal): void {
@@ -306,6 +309,7 @@ export class LobbyDO extends DurableObject<Env> {
       }
       this.calls.end(call.id);
       this.ctx.storage.delete(`call:${call.id}`);
+      this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
     }
   }
 
