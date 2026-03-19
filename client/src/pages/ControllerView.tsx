@@ -5,9 +5,6 @@ import { isValidFrequency, normalizeFrequency } from '../utils/frequency';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { useWebRTC } from '../hooks/useWebRTC';
-import Card from '../components/common/Card';
-import Button from '../components/common/Button';
-import StatusIndicator from '../components/common/StatusIndicator';
 
 export default function ControllerView() {
   const navigate = useNavigate();
@@ -29,7 +26,7 @@ export default function ControllerView() {
   currentCallRef.current = currentCall;
   incomingCallRef.current = incomingCall;
 
-  const { connectionState, remoteStream, error: webrtcError, isTransmitting, setupWebRTC, cleanup } = useWebRTC({
+  const { remoteStream, error: webrtcError, isTransmitting, setupWebRTC, cleanup } = useWebRTC({
     isInitiator: false,
   });
 
@@ -144,112 +141,223 @@ export default function ControllerView() {
     if (currentCall) send({ type: 'call:hangup', payload: { callId: currentCall.id } });
   };
 
+  // Phone line state
+  const lineCallsign = currentCall?.pilotCallsign ?? incomingCall?.pilotCallsign ?? null;
+  const lineStatus: 'active' | 'ringing' | 'idle' =
+    currentCall ? 'active' : incomingCall ? 'ringing' : 'idle';
+  const lineLedClass =
+    lineStatus === 'active' ? 'led-on-green' :
+    lineStatus === 'ringing' ? 'led-on-amber' : 'led-off';
+
   return (
-    <div className="min-h-screen p-4 bg-gradient-to-br from-green-50 to-gray-100">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-sm text-blue-600 font-semibold mb-1">
-                <span>VATSIM</span>
-                <span>•</span>
-                <span>ZLC ARTCC</span>
-                <span>•</span>
-                <span className="text-red-600">BETA</span>
-              </div>
-              <h1 className="text-3xl font-bold">Controller - FSS Phone</h1>
-              {user && <p className="text-sm text-gray-500">{user.name} (CID {user.cid})</p>}
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--console-bg)' }}>
+      <div className="w-full" style={{ maxWidth: 500 }}>
+        <div className="panel" style={{ border: '2px solid var(--panel-edge)' }}>
+
+          {/* ── Header ── */}
+          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '2px solid var(--panel-edge)' }}>
+            <div className="flex items-center gap-3">
+              <div className="screw" />
+              <span className="lcd-text lcd-amber text-sm tracking-widest">ZLC FSS CONSOLE</span>
             </div>
-            <div className="flex items-center gap-4">
-              <StatusIndicator status={isConnected ? (isOnline ? 'online' : 'offline') : 'offline'} />
-              <Button variant="secondary" onClick={() => navigate('/')}>Exit</Button>
+            <div className="flex items-center gap-3">
+              {isOnline && (
+                <div className="flex items-center gap-3 mr-2">
+                  <div className="flex items-center gap-1">
+                    <div className="led led-on-green" />
+                    <span className="panel-label">PWR</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className={`led ${isConnected ? 'led-on-green' : 'led-off'}`} />
+                    <span className="panel-label">NET</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className={`led ${currentCall ? 'led-on-red' : 'led-off'}`} />
+                    <span className="panel-label">REC</span>
+                  </div>
+                </div>
+              )}
+              <button
+                className="hw-btn px-2 py-1 text-xs"
+                style={{ color: '#aaa' }}
+                onClick={() => navigate('/')}
+              >
+                EXIT
+              </button>
+              <div className="screw" />
             </div>
+          </div>
+
+          {/* ── Body ── */}
+          <div className="px-5 py-4 space-y-4">
+
+            {!isOnline ? (
+              /* ──────── OFFLINE STATE ──────── */
+              <>
+                <div className="lcd-display p-3">
+                  <span className="panel-label block mb-1">POSITION</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. Seattle Radio"
+                    value={callsign}
+                    onChange={(e) => setCallsign(e.target.value)}
+                    className="panel-input w-full px-3 py-2 text-sm"
+                    style={{ color: 'var(--lcd-amber)', caretColor: 'var(--lcd-amber)' }}
+                  />
+                </div>
+                <div className="lcd-display p-3">
+                  <span className="panel-label block mb-1">FREQUENCY</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. 122.200"
+                    value={frequency}
+                    onChange={(e) => setFrequency(e.target.value)}
+                    className="panel-input w-full px-3 py-2 text-sm"
+                    style={{ color: 'var(--lcd-amber)', caretColor: 'var(--lcd-amber)' }}
+                  />
+                </div>
+
+                {(error || webrtcError) && (
+                  <div className="lcd-display px-3 py-2">
+                    <span className="lcd-text lcd-red text-xs">{error || webrtcError}</span>
+                  </div>
+                )}
+
+                <button
+                  className="hw-btn hw-btn-green w-full py-3 text-sm font-semibold tracking-wider"
+                  style={{ color: '#aaffaa' }}
+                  onClick={handleGoOnline}
+                  disabled={!isConnected}
+                >
+                  GO ONLINE
+                </button>
+
+                {user && (
+                  <div className="text-center">
+                    <span className="panel-label">{user.name} (CID {user.cid})</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* ──────── ONLINE STATE ──────── */
+              <>
+                {/* Position / Frequency bar */}
+                <div className="lcd-display flex">
+                  <div className="flex-1 px-3 py-2" style={{ borderRight: '1px solid #222' }}>
+                    <span className="panel-label block mb-0.5">POSITION</span>
+                    <span className="lcd-text lcd-amber text-sm">{callsign}</span>
+                  </div>
+                  <div className="flex-1 px-3 py-2">
+                    <span className="panel-label block mb-0.5">FREQ</span>
+                    <span className="lcd-text lcd-amber text-sm">{frequency}</span>
+                  </div>
+                </div>
+
+                {/* Phone Lines */}
+                <div style={{ borderTop: '1px solid var(--panel-edge)' }}>
+                  <span className="panel-label block pt-3 pb-1 px-1">PHONE LINES</span>
+                  <div className="lcd-display">
+                    {/* Line 1 */}
+                    <div className="flex items-center gap-3 px-3 py-2" style={{ borderBottom: '1px solid #181818' }}>
+                      <div className={`led ${lineLedClass}`} />
+                      <span className="panel-label w-12 shrink-0">LINE 1</span>
+                      <span
+                        className="lcd-text text-sm flex-1"
+                        style={{
+                          color: lineStatus === 'active' ? 'var(--lcd-green)' :
+                                 lineStatus === 'ringing' ? 'var(--lcd-amber)' : 'var(--lcd-dim)',
+                        }}
+                      >
+                        {lineCallsign ?? '\u2014'}
+                      </span>
+                      <span
+                        className={`lcd-text text-xs ${lineStatus === 'ringing' ? 'ring-pulse' : ''}`}
+                        style={{
+                          color: lineStatus === 'active' ? 'var(--lcd-green)' :
+                                 lineStatus === 'ringing' ? 'var(--lcd-amber)' : 'var(--lcd-dim)',
+                        }}
+                      >
+                        {lineStatus === 'active' ? 'ACTIVE' : lineStatus === 'ringing' ? 'RINGING' : 'IDLE'}
+                      </span>
+                    </div>
+                    {/* Line 2 (always idle placeholder) */}
+                    <div className="flex items-center gap-3 px-3 py-2">
+                      <div className="led led-off" />
+                      <span className="panel-label w-12 shrink-0">LINE 2</span>
+                      <span className="lcd-text text-sm flex-1" style={{ color: 'var(--lcd-dim)' }}>{'\u2014'}</span>
+                      <span className="lcd-text text-xs" style={{ color: 'var(--lcd-dim)' }}>IDLE</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* PTT bar */}
+                {currentCall && (
+                  <div
+                    className={`text-center py-3 font-semibold text-sm tracking-wider ${isTransmitting ? 'ptt-active' : ''}`}
+                    style={{
+                      background: isTransmitting ? 'var(--lcd-red)' : 'var(--btn-face)',
+                      color: isTransmitting ? '#fff' : '#888',
+                      border: '1px solid #222',
+                    }}
+                  >
+                    {isTransmitting ? 'TRANSMITTING' : 'HOLD [SPACE] TO TRANSMIT'}
+                  </div>
+                )}
+
+                {/* Errors */}
+                {(error || webrtcError) && (
+                  <div className="lcd-display px-3 py-2">
+                    <span className="lcd-text lcd-red text-xs">{error || webrtcError}</span>
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <button
+                    className="hw-btn hw-btn-green flex-1 py-2.5 text-xs font-semibold tracking-wider"
+                    style={{ color: '#aaffaa' }}
+                    disabled={!incomingCall}
+                    onClick={handleAnswerCall}
+                  >
+                    ANSWER
+                  </button>
+                  <button
+                    className="hw-btn hw-btn-red flex-1 py-2.5 text-xs font-semibold tracking-wider"
+                    style={{ color: '#ffaaaa' }}
+                    disabled={!incomingCall}
+                    onClick={handleRejectCall}
+                  >
+                    REJECT
+                  </button>
+                  <button
+                    className="hw-btn hw-btn-red flex-1 py-2.5 text-xs font-semibold tracking-wider"
+                    style={{ color: '#ffaaaa' }}
+                    disabled={!currentCall}
+                    onClick={handleHangup}
+                  >
+                    HANGUP
+                  </button>
+                  <button
+                    className="hw-btn flex-1 py-2.5 text-xs font-semibold tracking-wider"
+                    style={{ color: '#aaa' }}
+                    onClick={handleGoOffline}
+                  >
+                    OFF
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* ── Footer screws ── */}
+          <div className="flex justify-between px-4 py-2">
+            <div className="screw" />
+            <div className="screw" />
           </div>
         </div>
 
-        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
-        {webrtcError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{webrtcError}</div>}
-
-        {!isOnline ? (
-          <Card>
-            <h2 className="text-xl font-semibold mb-4">Go Online</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Callsign</label>
-                <input type="text" placeholder="e.g., Seattle Radio" value={callsign} onChange={(e) => setCallsign(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Frequency</label>
-                <input type="text" placeholder="e.g., 122.200" value={frequency} onChange={(e) => setFrequency(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
-              </div>
-              <Button variant="success" size="lg" className="w-full" onClick={handleGoOnline} disabled={!isConnected}>Go Online</Button>
-            </div>
-          </Card>
-        ) : (
-          <>
-            <Card className="mb-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">{callsign}</h2>
-                  <p className="text-gray-600">{frequency}</p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <StatusIndicator status={currentCall ? 'busy' : 'online'} />
-                  <Button variant="danger" onClick={handleGoOffline}>Go Offline</Button>
-                </div>
-              </div>
-            </Card>
-
-            {incomingCall && (
-              <Card className="border-4 border-yellow-400 animate-pulse">
-                <div className="text-center">
-                  <div className="w-20 h-20 bg-yellow-500 rounded-full mx-auto flex items-center justify-center mb-4">
-                    <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-2xl font-bold mb-2">Incoming Call</h2>
-                  <p className="text-gray-600 mb-6">{incomingCall.pilotCallsign}</p>
-                  <div className="flex gap-4 justify-center">
-                    <Button variant="success" size="lg" onClick={handleAnswerCall}>Answer</Button>
-                    <Button variant="danger" size="lg" onClick={handleRejectCall}>Reject</Button>
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {currentCall && (
-              <Card className="text-center">
-                <div className="mb-4">
-                  <div className="w-20 h-20 bg-green-500 rounded-full mx-auto flex items-center justify-center mb-4">
-                    <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-2xl font-bold mb-2">Call Active</h2>
-                  <p className="text-gray-600 mb-2">Connected with {currentCall.pilotCallsign}</p>
-                  <p className="text-sm text-gray-500">Connection: {connectionState}</p>
-                </div>
-                <div className={`mb-4 px-4 py-3 rounded-lg text-center font-semibold ${isTransmitting ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                  {isTransmitting ? 'TRANSMITTING' : 'Hold SPACE to talk'}
-                </div>
-                <Button variant="danger" size="lg" onClick={handleHangup}>Hang Up</Button>
-                <audio ref={remoteAudioRef} autoPlay />
-              </Card>
-            )}
-
-            {!incomingCall && !currentCall && (
-              <Card className="text-center py-12">
-                <div className="text-gray-400 mb-4">
-                  <svg className="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
-                  </svg>
-                </div>
-                <p className="text-gray-500">Waiting for calls...</p>
-              </Card>
-            )}
-          </>
-        )}
+        {/* Hidden audio element for WebRTC */}
+        <audio ref={remoteAudioRef} autoPlay />
       </div>
     </div>
   );
