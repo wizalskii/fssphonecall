@@ -6,11 +6,13 @@ import { startRinging, stopRinging } from '../utils/ringSound';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../hooks/useSocket';
 import { useWebRTC } from '../hooks/useWebRTC';
+import { useVatsimStatus } from '../hooks/useVatsimStatus';
 
 export default function ControllerView() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isConnected, send, on, off } = useSocket();
+  const { status } = useVatsimStatus();
 
   const [isOnline, setIsOnline] = useState(false);
   const isOnlineRef = useRef(false);
@@ -110,6 +112,18 @@ export default function ControllerView() {
     };
   }, []);
 
+  // Auto-populate callsign and frequency from VATSIM network status
+  useEffect(() => {
+    if (status?.online && status.type === 'controller') {
+      if (status.callsign && !callsign) {
+        setCallsign(status.callsign);
+      }
+      if (status.frequency && !frequency) {
+        setFrequency(status.frequency);
+      }
+    }
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleGoOnline = () => {
     if (!callsign.trim() || !frequency.trim()) {
       setError('Please enter both callsign and frequency');
@@ -166,7 +180,7 @@ export default function ControllerView() {
           <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '2px solid var(--panel-edge)' }}>
             <div className="flex items-center gap-3">
               <div className="screw" />
-              <span className="lcd-text lcd-amber text-sm tracking-widest">ZLC FSS CONSOLE</span>
+              <span className="lcd-text lcd-amber text-sm tracking-widest">ZLC vFSS CONSOLE</span>
             </div>
             <div className="flex items-center gap-3">
               {isOnline && (
@@ -202,6 +216,14 @@ export default function ControllerView() {
             {!isOnline ? (
               /* ──────── OFFLINE STATE ──────── */
               <>
+                {status?.requireConnection && !status?.online && (
+                  <div className="lcd-display px-3 py-2">
+                    <span className="lcd-text lcd-red text-xs" style={{ textAlign: 'center', display: 'block' }}>
+                      NOT CONNECTED TO VATSIM NETWORK
+                    </span>
+                  </div>
+                )}
+
                 <div className="lcd-display p-3">
                   <span className="panel-label block mb-1">POSITION</span>
                   <input
