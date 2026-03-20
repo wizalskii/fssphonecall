@@ -1,6 +1,10 @@
-// Generate a simple ringing tone using Web Audio API
+// VSCS-style override / incoming call tone
+// Two-tone warble: alternating 853Hz and 960Hz (similar to VSCS alert tone)
+// Pattern: 300ms high, 300ms low, 300ms high, 300ms low, then 1.5s silence
+
 let audioCtx: AudioContext | null = null;
-let ringInterval: ReturnType<typeof setInterval> | null = null;
+let ringTimeout: ReturnType<typeof setTimeout> | null = null;
+let isRinging = false;
 
 function getCtx(): AudioContext {
   if (!audioCtx) audioCtx = new AudioContext();
@@ -35,13 +39,18 @@ function playRingBurst() {
 
 export function startRinging() {
   stopRinging();
-  playRingBurst();
-  ringInterval = setInterval(playRingBurst, 2000);
+  isRinging = true;
+  playWarbleCycle();
 }
 
 export function stopRinging() {
-  if (ringInterval) {
-    clearInterval(ringInterval);
-    ringInterval = null;
+  isRinging = false;
+  if (ringTimeout) {
+    clearTimeout(ringTimeout);
+    ringTimeout = null;
+  }
+  if (audioCtx) {
+    audioCtx.close();
+    audioCtx = null;
   }
 }
