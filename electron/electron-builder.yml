@@ -1,0 +1,29 @@
+appId: cc.virtualfssphone.vfss
+productName: vFSS Phone
+directories:
+  output: release
+  buildResources: resources
+files:
+  - dist/**/*
+  - package.json
+extraResources:
+  - from: ../client/dist
+    to: client
+    filter:
+      - "**/*"
+win:
+  target: nsis
+  icon: resources/icon.ico
+mac:
+  target: dmg
+  icon: resources/icon.icns
+  category: public.app-category.utilities
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+publish:
+  provider: s3
+  bucket: vfss-releases
+  endpoint: ${R2_ENDPOINT}
+  region: auto
+  acl: null

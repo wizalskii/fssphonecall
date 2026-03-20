@@ -13,11 +13,12 @@ interface VatsimStatus {
 
 export function useVatsimStatus() {
   const { token, user } = useAuth();
+  const cid = user?.cid;
   const [status, setStatus] = useState<VatsimStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!token || !user) {
+    if (!token || !cid) {
       setStatus(null);
       setLoading(false);
       return;
@@ -27,7 +28,7 @@ export function useVatsimStatus() {
 
     const fetchStatus = async () => {
       try {
-        const res = await fetch(`${SERVER_URL}/vatsim-status?cid=${user.cid}`, {
+        const res = await fetch(`${SERVER_URL}/vatsim-status?cid=${cid}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok && !cancelled) {
@@ -47,7 +48,7 @@ export function useVatsimStatus() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [token, user]);
+  }, [token, cid]);
 
   return { status, loading };
 }

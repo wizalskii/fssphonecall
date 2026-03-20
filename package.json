@@ -6,7 +6,8 @@
   "workspaces": [
     "client",
     "worker",
-    "shared"
+    "shared",
+    "electron"
   ],
   "scripts": {
     "dev": "concurrently \"cd worker && npm run dev\" \"cd client && npm run dev:local\"",

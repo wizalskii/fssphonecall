@@ -16,6 +16,9 @@ export default function Home() {
             <div className="screw" />
             <div className="flex items-center gap-2">
               <span className="panel-label">vFSS Phone Simulator</span>
+              <button onClick={() => navigate('/settings')} className="hw-btn px-2 py-1 text-xs text-gray-400" title="Settings">
+                {'\u2699'}
+              </button>
               <button onClick={toggleTheme} className="hw-btn px-2 py-1 text-xs text-gray-400" title="Toggle theme">
                 {theme === 'dark' ? '\u2600' : '\u263E'}
               </button>
@@ -47,15 +50,17 @@ export default function Home() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className={`grid ${user.rating > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-3 mb-4`}>
                 <button onClick={() => navigate('/pilot')} className="hw-btn p-4 text-center">
                   <div className="lcd-text lcd-green text-lg mb-1">PILOT</div>
                   <div className="panel-label" style={{ fontSize: '8px' }}>CALL vFSS CONTROLLERS</div>
                 </button>
-                <button onClick={() => navigate('/controller')} className="hw-btn-green hw-btn p-4 text-center">
-                  <div className="lcd-text lcd-amber text-lg mb-1">CONTROLLER</div>
-                  <div className="panel-label" style={{ fontSize: '8px' }}>ANSWER PILOT CALLS</div>
-                </button>
+                {user.rating > 1 && (
+                  <button onClick={() => navigate('/controller')} className="hw-btn-green hw-btn p-4 text-center">
+                    <div className="lcd-text lcd-amber text-lg mb-1">CONTROLLER</div>
+                    <div className="panel-label" style={{ fontSize: '8px' }}>ANSWER PILOT CALLS</div>
+                  </button>
+                )}
               </div>
             </>
           ) : (
