@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vFSS Phone — Realistic Calling for VATSIM</title>
+<meta name="description" content="The first dedicated phone simulator for VATSIM Flight Service Stations. Realistic calling between pilots and controllers.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --navy: #0b1120;
+  --navy-mid: #111b2e;
+  --navy-light: #172140;
+  --navy-surface: #1a2744;
+  --slate: #2a3654;
+  --muted: #5a6a8a;
+  --text: #c8d0e0;
+  --text-bright: #e8ecf4;
+  --green: #39ff14;
+  --green-dim: #1a5a10;
+  --green-glow: rgba(57,255,20,0.15);
+  --amber: #ffbf00;
+  --amber-dim: #5a4a00;
+  --accent-blue: #3b82f6;
+  --lcd-bg: #0a0f04;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--navy);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* Grain overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+a { color: inherit; text-decoration: none; }
+
+.container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ── NAV ── */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 16px 0;
+  background: rgba(11,17,32,0.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(42,54,84,0.3);
+}
+nav .container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nav-brand {
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--green);
+  font-size: 16px;
+  letter-spacing: 2px;
+  text-shadow: 0 0 12px var(--green-glow);
+}
+.nav-links { display: flex; gap: 28px; align-items: center; }
+.nav-links a {
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--text-bright); }
+.nav-cta {
+  background: var(--green);
+  color: #000 !important;
+  padding: 7px 18px;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  border: none;
+  transition: all 0.2s;
+}
+.nav-cta:hover { box-shadow: 0 0 20px var(--green-glow); }
+
+/* ── HERO ── */
+.hero {
+  padding: 160px 0 80px;
+  text-align: left;
+  position: relative;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -200px;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(ellipse, rgba(57,255,20,0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-badge {
+  display: inline-block;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--green);
+  border: 1px solid var(--green-dim);
+  padding: 6px 16px;
+  margin-bottom: 32px;
+  text-shadow: 0 0 8px var(--green-glow);
+  animation: fadeInUp 0.6s ease both;
+}
+.hero h1 {
+  font-family: 'Rajdhani', sans-serif; font-weight: 700;
+  font-size: clamp(52px, 8vw, 92px);
+  color: var(--text-bright);
+  line-height: 1.0;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+  animation: fadeInUp 0.6s ease 0.1s both;
+}
+.hero h1 em {
+  font-style: normal;
+  color: var(--green);
+  text-shadow: 0 0 40px rgba(57,255,20,0.2);
+}
+.hero-sub {
+  font-size: 18px;
+  color: var(--muted);
+  max-width: 480px;
+  line-height: 1.7;
+  margin-bottom: 40px;
+  font-weight: 300;
+  animation: fadeInUp 0.6s ease 0.2s both;
+}
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  animation: fadeInUp 0.6s ease 0.3s both;
+}
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--green);
+  color: #000;
+  padding: 14px 28px;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s;
+}
+.btn-primary:hover {
+  box-shadow: 0 0 30px var(--green-glow), 0 4px 20px rgba(0,0,0,0.3);
+  transform: translateY(-1px);
+}
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--text);
+  padding: 14px 28px;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--slate);
+  cursor: pointer;
+  transition: all 0.25s;
+}
+.btn-secondary:hover {
+  border-color: var(--muted);
+  background: rgba(255,255,255,0.02);
+}
+
+/* ── BENTO GRID ── */
+.bento-section {
+  padding: 60px 0;
+}
+.section-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: var(--green);
+  text-shadow: 0 0 8px var(--green-glow);
+  margin-bottom: 12px;
+}
+.section-title {
+  font-family: 'Rajdhani', sans-serif; font-weight: 700;
+  font-size: clamp(34px, 5vw, 52px);
+  color: var(--text-bright);
+  letter-spacing: 0.01em;
+  margin-bottom: 48px;
+  max-width: 500px;
+  text-transform: uppercase;
+}
+
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-auto-rows: minmax(180px, auto);
+  gap: 16px;
+}
+.bento-card {
+  background: var(--navy-mid);
+  border: 1px solid rgba(42,54,84,0.4);
+  padding: 28px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.bento-card:hover {
+  border-color: rgba(57,255,20,0.15);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+}
+.bento-card .card-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--green);
+  text-shadow: 0 0 6px var(--green-glow);
+  margin-bottom: 10px;
+}
+.bento-card h3 {
+  font-family: 'Rajdhani', sans-serif; font-weight: 600;
+  font-size: 22px;
+  color: var(--text-bright);
+  margin-bottom: 8px;
+}
+.bento-card p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* Card positions */
+.bento-voice    { grid-column: 1 / 8;  grid-row: 1 / 3; }
+.bento-sso      { grid-column: 8 / 13; grid-row: 1 / 2; }
+.bento-ptt      { grid-column: 8 / 13; grid-row: 2 / 3; }
+.bento-desktop  { grid-column: 1 / 5;  grid-row: 3 / 4; }
+.bento-freq     { grid-column: 5 / 9;  grid-row: 3 / 4; }
+.bento-console  { grid-column: 9 / 13; grid-row: 3 / 4; }
+
+/* LCD mockup inside the voice card */
+.lcd-mockup {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  width: 240px;
+  background: var(--lcd-bg);
+  border: 2px solid #111;
+  padding: 16px;
+  box-shadow: inset 0 2px 10px rgba(0,0,0,0.8), 0 4px 30px rgba(0,0,0,0.5);
+}
+.lcd-mockup .freq {
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--green);
+  text-shadow: 0 0 10px var(--green);
+  font-size: 28px;
+  text-align: center;
+  letter-spacing: 2px;
+}
+.lcd-mockup .station {
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--green);
+  text-shadow: 0 0 6px var(--green);
+  font-size: 10px;
+  text-align: center;
+  opacity: 0.6;
+  margin-top: 4px;
+}
+
+/* Amber LCD for console card */
+.lcd-amber-mockup {
+  background: var(--lcd-bg);
+  border: 2px solid #111;
+  padding: 10px 14px;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+  margin-top: 16px;
+}
+.lcd-amber-mockup .line {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.lcd-amber-mockup .led {
+  width: 6px; height: 6px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.led-g { background: #00e676; box-shadow: 0 0 6px #00e676; }
+.led-a { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+.led-off { background: #2a2a2a; }
+
+/* PTT indicator in card */
+.ptt-indicator {
+  margin-top: 16px;
+  background: var(--lcd-bg);
+  border: 2px solid #111;
+  padding: 10px;
+  text-align: center;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);
+  letter-spacing: 1px;
+}
+.ptt-indicator.active {
+  color: #ff3333;
+  text-shadow: 0 0 10px rgba(255,51,51,0.5);
+  animation: pttPulse 0.8s ease infinite;
+}
+@keyframes pttPulse {
+  0%,100% { box-shadow: inset 0 2px 6px rgba(0,0,0,0.6), 0 0 8px rgba(255,51,51,0.2); }
+  50% { box-shadow: inset 0 2px 6px rgba(0,0,0,0.6), 0 0 16px rgba(255,51,51,0.4); }
+}
+
+/* ── SHOWCASE ── */
+.showcase-section { padding: 80px 0; }
+.showcase-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 48px;
+}
+.showcase-panel {
+  background: var(--navy-mid);
+  border: 1px solid rgba(42,54,84,0.4);
+  padding: 32px;
+  position: relative;
+}
+.showcase-panel .panel-tag {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+.showcase-device {
+  background: #14181f;
+  border: 3px solid #222830;
+  padding: 16px;
+}
+.showcase-device .screws {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.showcase-device .screw-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #555, #333 60%, #222);
+}
+.showcase-lcd {
+  background: var(--lcd-bg);
+  border: 2px solid #111;
+  padding: 14px;
+  box-shadow: inset 0 2px 10px rgba(0,0,0,0.8);
+  text-align: center;
+}
+.showcase-lcd.green .freq {
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--green);
+  text-shadow: 0 0 12px var(--green);
+  font-size: 32px;
+  letter-spacing: 3px;
+}
+.showcase-lcd.green .sub {
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--green);
+  text-shadow: 0 0 6px var(--green);
+  font-size: 10px;
+  opacity: 0.5;
+  margin-top: 4px;
+}
+.showcase-lcd.amber .freq {
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--amber);
+  text-shadow: 0 0 12px var(--amber);
+  font-size: 26px;
+  letter-spacing: 2px;
+}
+.showcase-lcd.amber .sub {
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--amber);
+  text-shadow: 0 0 6px var(--amber);
+  font-size: 10px;
+  opacity: 0.5;
+  margin-top: 4px;
+}
+.showcase-btns {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+.showcase-btn {
+  flex: 1;
+  padding: 8px;
+  text-align: center;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+.showcase-btn.g { background: linear-gradient(180deg,#2d8a4e,#0f4020); border: 1px solid #0a2a12; color: #aaffaa; }
+.showcase-btn.r { background: linear-gradient(180deg,#8a2d2d,#401010); border: 1px solid #2a0a0a; color: #ffaaaa; }
+.showcase-btn.n { background: linear-gradient(180deg,#4a4d55,#15171a); border: 1px solid #222; color: #aaa; }
+
+/* ── HOW IT WORKS ── */
+.steps-section { padding: 80px 0; }
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  margin-top: 48px;
+}
+.step {
+  position: relative;
+  padding-left: 0;
+}
+.step-number {
+  font-family: 'Rajdhani', sans-serif; font-weight: 700;
+  font-size: 72px;
+  color: var(--navy-light);
+  line-height: 1;
+  margin-bottom: 12px;
+  letter-spacing: -0.02em;
+}
+.step h3 {
+  font-family: 'Rajdhani', sans-serif; font-weight: 600;
+  font-size: 22px;
+  color: var(--text-bright);
+  margin-bottom: 8px;
+}
+.step p {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.step-connector {
+  position: absolute;
+  top: 36px;
+  right: -20px;
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--slate);
+  font-size: 20px;
+}
+
+/* ── DOWNLOAD ── */
+.download-section {
+  padding: 80px 0;
+  text-align: center;
+}
+.download-section .section-label,
+.download-section .section-title { text-align: center; margin-left: auto; margin-right: auto; }
+.download-cards {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin-top: 40px;
+  flex-wrap: wrap;
+}
+.download-card {
+  background: var(--navy-mid);
+  border: 1px solid rgba(42,54,84,0.4);
+  padding: 32px 40px;
+  text-align: center;
+  min-width: 220px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.download-card:hover {
+  border-color: rgba(57,255,20,0.15);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+}
+.download-card .os {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--green);
+  letter-spacing: 2px;
+  text-shadow: 0 0 6px var(--green-glow);
+  margin-bottom: 8px;
+}
+.download-card .format {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+.download-card .btn-primary { width: 100%; justify-content: center; }
+
+/* ── FOOTER ── */
+footer {
+  padding: 40px 0;
+  border-top: 1px solid rgba(42,54,84,0.3);
+}
+footer .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.footer-brand {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+.footer-links {
+  display: flex;
+  gap: 24px;
+}
+.footer-links a {
+  font-size: 12px;
+  color: var(--muted);
+  transition: color 0.2s;
+}
+.footer-links a:hover { color: var(--text); }
+.footer-credit {
+  width: 100%;
+  text-align: center;
+  font-size: 11px;
+  color: var(--slate);
+  margin-top: 16px;
+  letter-spacing: 0.03em;
+}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Scroll animations */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  .bento-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: auto;
+  }
+  .bento-voice    { grid-column: 1 / -1; grid-row: auto; }
+  .bento-sso      { grid-column: 1 / 2; grid-row: auto; }
+  .bento-ptt      { grid-column: 2 / 3; grid-row: auto; }
+  .bento-desktop  { grid-column: 1 / 2; grid-row: auto; }
+  .bento-freq     { grid-column: 2 / 3; grid-row: auto; }
+  .bento-console  { grid-column: 1 / -1; grid-row: auto; }
+  .lcd-mockup { position: static; width: 100%; margin-top: 20px; }
+  .showcase-grid { grid-template-columns: 1fr; }
+  .steps-grid { grid-template-columns: 1fr; }
+  .step-connector { display: none; }
+}
+@media (max-width: 600px) {
+  .bento-grid { grid-template-columns: 1fr; }
+  .bento-sso, .bento-ptt, .bento-desktop, .bento-freq { grid-column: 1 / -1; }
+  .hero h1 { font-size: 40px; }
+  .hero { padding: 120px 0 60px; }
+  .nav-links a:not(.nav-cta) { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="container">
+    <a href="#" class="nav-brand">vFSS</a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#showcase">Product</a>
+      <a href="#how-it-works">How It Works</a>
+      <a href="#download">Download</a>
+      <a href="https://client.virtualfssphone.cc" class="nav-cta">Launch App</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">VATSIM • ZLC ARTCC • BETA</div>
+    <h1>Realistic calling<br>for <em>VATSIM</em></h1>
+    <p class="hero-sub">The first dedicated phone simulator for Flight Service Stations. Realistic voice calls between pilots and controllers, right in your browser.</p>
+    <div class="hero-actions">
+      <a href="https://client.virtualfssphone.cc" class="btn-primary">
+        Launch App
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>
+      </a>
+      <a href="#download" class="btn-secondary">
+        Download Desktop
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14m-7-7 7 7 7-7"/></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- BENTO FEATURES -->
+<section class="bento-section" id="features">
+  <div class="container">
+    <div class="section-label reveal">CAPABILITIES</div>
+    <h2 class="section-title reveal">Built for the<br>real thing.</h2>
+    <div class="bento-grid">
+
+      <!-- Large: Real-time Voice -->
+      <div class="bento-card bento-voice reveal">
+        <div class="card-label">REALISTIC CALLING</div>
+        <h3>Peer-to-peer audio</h3>
+        <p>Direct voice connection between pilot and controller. No intermediary servers touching your audio — just you and the other party, connected through encrypted channels.</p>
+        <div class="lcd-mockup">
+          <div class="freq">122.800</div>
+          <div class="station">SEATTLE RADIO — ON CALL</div>
+        </div>
+      </div>
+
+      <!-- VATSIM SSO -->
+      <div class="bento-card bento-sso reveal">
+        <div class="card-label">VATSIM SSO</div>
+        <h3>One-click sign in</h3>
+        <p>Authenticate with your existing VATSIM account. Your callsign and rating are loaded automatically.</p>
+      </div>
+
+      <!-- Push-to-Talk -->
+      <div class="bento-card bento-ptt reveal">
+        <div class="card-label">PUSH-TO-TALK</div>
+        <h3>Global hotkey</h3>
+        <p>Configurable PTT key that works even when the app isn't focused.</p>
+        <div class="ptt-indicator">HOLD [NUM0] TO TRANSMIT</div>
+        <div class="ptt-indicator active" style="margin-top:6px;">■ TRANSMITTING</div>
+      </div>
+
+      <!-- Desktop App -->
+      <div class="bento-card bento-desktop reveal">
+        <div class="card-label">DESKTOP APP</div>
+        <h3>Windows & Mac</h3>
+        <p>Native Electron app with auto-updates and audio device selection.</p>
+      </div>
+
+      <!-- Frequency Validation -->
+      <div class="bento-card bento-freq reveal">
+        <div class="card-label">VHF CHANNELS</div>
+        <h3>Real frequencies</h3>
+        <p>118.000–136.975 MHz with 25 kHz and 8.33 kHz channel spacing validation.</p>
+      </div>
+
+      <!-- ATC Console -->
+      <div class="bento-card bento-console reveal">
+        <div class="card-label">ATC CONSOLE</div>
+        <h3>Controller desk</h3>
+        <p>Multi-line phone console with caller ID and line status.</p>
+        <div class="lcd-amber-mockup">
+          <div class="line"><span class="led led-g"></span><span style="color:var(--amber);font-family:'Share Tech Mono',monospace;font-size:11px;">LINE 1 &nbsp;N12345 &nbsp;&nbsp;&nbsp;ACTIVE</span></div>
+          <div class="line"><span class="led led-off"></span><span style="color:#333;font-family:'Share Tech Mono',monospace;font-size:11px;">LINE 2 &nbsp;— &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IDLE</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- PRODUCT SHOWCASE -->
+<section class="showcase-section" id="showcase">
+  <div class="container">
+    <div class="section-label reveal">PRODUCT</div>
+    <h2 class="section-title reveal">Two roles.<br>One system.</h2>
+    <div class="showcase-grid">
+
+      <!-- Pilot Radio -->
+      <div class="showcase-panel reveal">
+        <div class="panel-tag">PILOT — COMM RADIO</div>
+        <div class="showcase-device">
+          <div class="screws">
+            <div class="screw-dot"></div>
+            <span style="font-family:'Share Tech Mono',monospace;font-size:8px;color:#555;letter-spacing:2px;">vFSS COMM 1</span>
+            <div class="screw-dot"></div>
+          </div>
+          <div class="showcase-lcd green">
+            <div class="freq">122.800</div>
+            <div class="sub">SEATTLE RADIO</div>
+          </div>
+          <div class="showcase-btns">
+            <div class="showcase-btn n">▲</div>
+            <div class="showcase-btn n">▼</div>
+            <div class="showcase-btn g">CALL</div>
+            <div class="showcase-btn r">END</div>
+          </div>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-top:16px;line-height:1.6;">
+          Browse online controllers, select a frequency, and call — just like tuning a real comm radio. Green phosphor LCD display with integrated station list.
+        </p>
+      </div>
+
+      <!-- Controller Console -->
+      <div class="showcase-panel reveal">
+        <div class="panel-tag">CONTROLLER — ATC CONSOLE</div>
+        <div class="showcase-device">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--amber);text-shadow:0 0 4px var(--amber);letter-spacing:1px;">ZLC vFSS CONSOLE</span>
+            <div style="display:flex;gap:4px;">
+              <span class="led led-g" style="width:5px;height:5px;"></span>
+              <span class="led led-g" style="width:5px;height:5px;"></span>
+              <span class="led led-off" style="width:5px;height:5px;"></span>
+            </div>
+          </div>
+          <div class="showcase-lcd amber">
+            <div class="freq" style="font-size:20px;">OAKLAND OCEANIC</div>
+            <div class="sub">123.675</div>
+          </div>
+          <div class="showcase-btns" style="margin-top:8px;">
+            <div class="showcase-btn g">ANS</div>
+            <div class="showcase-btn r">REJ</div>
+            <div class="showcase-btn r">HUP</div>
+            <div class="showcase-btn n">OFF</div>
+          </div>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-top:16px;line-height:1.6;">
+          Professional ATC desk console with amber displays, phone line indicators, and incoming call alerts. Manage your position like a real facility.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="steps-section" id="how-it-works">
+  <div class="container">
+    <div class="section-label reveal">GETTING STARTED</div>
+    <h2 class="section-title reveal">Three steps.</h2>
+    <div class="steps-grid">
+      <div class="step reveal">
+        <div class="step-number">01</div>
+        <h3>Sign in with VATSIM</h3>
+        <p>Use your existing VATSIM account. No separate registration needed — your callsign and rating are loaded automatically.</p>
+        <span class="step-connector">→</span>
+      </div>
+      <div class="step reveal">
+        <div class="step-number">02</div>
+        <h3>Choose your role</h3>
+        <p>Enter as a pilot to call FSS controllers, or go online as a controller to receive calls from pilots.</p>
+        <span class="step-connector">→</span>
+      </div>
+      <div class="step reveal">
+        <div class="step-number">03</div>
+        <h3>Start talking</h3>
+        <p>Hold your PTT key and speak. Crystal-clear peer-to-peer voice with push-to-talk — just like the real thing.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DOWNLOAD -->
+<section class="download-section" id="download">
+  <div class="container">
+    <div class="section-label reveal">DOWNLOAD</div>
+    <h2 class="section-title reveal" style="text-align:center;max-width:none;">Get the desktop app.</h2>
+    <p class="reveal" style="color:var(--muted);max-width:400px;margin:0 auto 0;font-size:14px;text-align:center;">Global push-to-talk, audio device selection, and automatic updates. Or use the web app — no install required.</p>
+    <div class="download-cards reveal">
+      <div class="download-card">
+        <div class="os">WINDOWS</div>
+        <div class="format">Installer (.exe)</div>
+        <a href="#" class="btn-primary" style="font-size:12px;padding:10px 20px;">Download for Windows</a>
+      </div>
+      <div class="download-card">
+        <div class="os">MACOS</div>
+        <div class="format">Disk Image (.dmg)</div>
+        <a href="#" class="btn-primary" style="font-size:12px;padding:10px 20px;">Download for Mac</a>
+      </div>
+    </div>
+    <p class="reveal" style="color:var(--slate);font-size:12px;text-align:center;margin-top:24px;">
+      Or <a href="https://client.virtualfssphone.cc" style="color:var(--green);text-decoration:underline;">launch in your browser</a> — works everywhere, no download needed.
+    </p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-brand">vFSS PHONE • ZLC ARTCC • SALT LAKE CITY</div>
+    <div class="footer-links">
+      <a href="https://client.virtualfssphone.cc/privacy">Privacy Policy</a>
+      <a href="https://github.com/wizalskii/fssphonecall">GitHub</a>
+      <a href="https://zlcartcc.org">ZLC ARTCC</a>
+    </div>
+    <div class="footer-credit">
+      Designed and improved by @miguellini37 and the ZLC (Salt Lake ARTCC) team
+    </div>
+  </div>
+</footer>
+
+<script>
+// Scroll reveal
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>

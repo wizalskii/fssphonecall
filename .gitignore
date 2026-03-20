@@ -38,6 +38,7 @@ shared/types/*.js
 # Superpowers / internal docs
 .superpowers/
 docs/superpowers/
+
 # Electron
 electron/dist/
 electron/release/
