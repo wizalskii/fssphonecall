@@ -255,6 +255,7 @@ body {
 
 [data-theme="light"] body {
   background: var(--console-bg);
+  color: #333;
 }
 
 [data-theme="light"] .hw-btn {

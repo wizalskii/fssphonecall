@@ -68,4 +68,8 @@ export function stopRinging() {
     clearTimeout(ringTimeout);
     ringTimeout = null;
   }
+  if (audioCtx) {
+    audioCtx.close();
+    audioCtx = null;
+  }
 }

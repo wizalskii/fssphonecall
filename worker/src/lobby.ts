@@ -69,12 +69,12 @@ export class LobbyDO extends DurableObject<Env> {
     // Enforce single-use WS ticket
     const jti = request.headers.get('X-Ticket-JTI');
     if (jti) {
-      const used = await this.ctx.storage.get<boolean>(`ticket:${jti}`);
-      if (used) {
+      const ticketExpiry = await this.ctx.storage.get<number>(`ticket:${jti}`);
+      if (ticketExpiry) {
         return new Response('Ticket already used', { status: 401 });
       }
-      // Mark as used, auto-expire via DO storage (cleaned up after 2 min)
-      await this.ctx.storage.put(`ticket:${jti}`, true);
+      // Mark as used with expiry timestamp, cleaned up by alarm
+      await this.ctx.storage.put(`ticket:${jti}`, Date.now() + 120_000);
       this.ctx.storage.setAlarm(Date.now() + 120_000);
     }
 
@@ -135,10 +135,10 @@ export class LobbyDO extends DurableObject<Env> {
         break;
       case 'webrtc:offer':
       case 'webrtc:answer':
-        this.relayWebRTC(msg.type, msg.payload as WebRTCSignal);
+        this.relayWebRTC(msg.type, msg.payload as WebRTCSignal, meta);
         break;
       case 'webrtc:ice-candidate':
-        this.relayICE(msg.payload as ICECandidateData);
+        this.relayICE(msg.payload as ICECandidateData, meta);
         break;
     }
   }
@@ -162,9 +162,19 @@ export class LobbyDO extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     // Clean up expired ticket JTIs
-    const tickets = await this.ctx.storage.list({ prefix: 'ticket:' });
-    for (const key of tickets.keys()) {
-      await this.ctx.storage.delete(key);
+    const now = Date.now();
+    const tickets = await this.ctx.storage.list<number>({ prefix: 'ticket:' });
+    let remaining = 0;
+    for (const [key, expiry] of tickets) {
+      if (expiry <= now) {
+        await this.ctx.storage.delete(key);
+      } else {
+        remaining++;
+      }
+    }
+    // Reschedule if tickets remain
+    if (remaining > 0) {
+      this.ctx.storage.setAlarm(Date.now() + 120_000);
     }
   }
 
@@ -301,11 +311,19 @@ export class LobbyDO extends DurableObject<Env> {
     this.broadcast({ type: 'controllers:list', payload: this.controllers.getAll() });
   }
 
-  private relayWebRTC(type: 'webrtc:offer' | 'webrtc:answer', data: WebRTCSignal): void {
+  private relayWebRTC(type: 'webrtc:offer' | 'webrtc:answer', data: WebRTCSignal, meta: ConnectionMeta): void {
+    const call = this.calls.findByConnectionId(meta.connectionId);
+    if (!call) return;
+    const otherParty = call.pilotConnectionId === meta.connectionId ? call.controllerConnectionId : call.pilotConnectionId;
+    if (data.to !== otherParty) return;
     this.sendTo(data.to, { type, payload: data });
   }
 
-  private relayICE(data: ICECandidateData): void {
+  private relayICE(data: ICECandidateData, meta: ConnectionMeta): void {
+    const call = this.calls.findByConnectionId(meta.connectionId);
+    if (!call) return;
+    const otherParty = call.pilotConnectionId === meta.connectionId ? call.controllerConnectionId : call.pilotConnectionId;
+    if (data.to !== otherParty) return;
     this.sendTo(data.to, { type: 'webrtc:ice-candidate', payload: data });
   }
 

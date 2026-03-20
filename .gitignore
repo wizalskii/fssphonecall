@@ -34,3 +34,7 @@ build/
 # OS
 Thumbs.db
 shared/types/*.js
+
+# Electron
+electron/dist/
+electron/release/
