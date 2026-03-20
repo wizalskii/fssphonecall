@@ -257,16 +257,3 @@ body {
   background: var(--console-bg);
   color: #333;
 }
-
-[data-theme="light"] .hw-btn {
-  color: #222;
-}
-
-[data-theme="light"] .panel-label {
-  color: #333;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
-}
-
-[data-theme="light"] .screw {
-  background: radial-gradient(circle at 40% 35%, #999, #666 60%, #555);
-}
