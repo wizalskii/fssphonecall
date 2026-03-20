@@ -11,7 +11,9 @@
   ],
   "scripts": {
     "dev": "concurrently \"cd worker && npm run dev\" \"cd client && npm run dev:local\"",
+    "dev:electron": "concurrently \"cd client && npm run dev:local\" \"cd electron && npm run dev\"",
     "build": "cd shared && npm run build && cd ../client && npm run build",
+    "build:electron": "cd shared && npm run build && cd ../client && npm run build && cd ../electron && npm run build && npm run dist",
     "build:shared": "cd shared && npm run build",
     "build:client": "cd client && npm run build",
     "deploy:worker": "cd worker && npm run deploy",

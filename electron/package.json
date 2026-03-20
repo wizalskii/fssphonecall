@@ -6,7 +6,7 @@
   "author": "ZLC ARTCC",
   "license": "MIT",
   "scripts": {
-    "dev": "tsc && electron .",
+    "dev": "tsc && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
     "build": "tsc",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
@@ -14,11 +14,12 @@
     "dist:mac": "electron-builder --mac"
   },
   "dependencies": {
-    "electron-store": "^10.0.0",
+    "electron-store": "^8.2.0",
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "@types/node": "^20.11.5",
+    "cross-env": "^7.0.3",
     "electron": "^33.0.0",
     "electron-builder": "^25.1.8",
     "typescript": "^5.3.3"
