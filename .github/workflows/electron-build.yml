@@ -1,0 +1,140 @@
+name: Electron Build & Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-electron:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build shared types
+        run: cd shared && npm run build
+
+      - name: Build client
+        run: cd client && npm run build
+        env:
+          VITE_SERVER_URL: ${{ secrets.VITE_SERVER_URL }}
+
+      - name: Build electron TypeScript
+        run: cd electron && npm run build
+
+      - name: Package electron (Windows)
+        if: matrix.os == 'windows-latest'
+        run: cd electron && npx electron-builder --win --publish never
+
+      - name: Package electron (Mac)
+        if: matrix.os == 'macos-latest'
+        run: cd electron && npx electron-builder --mac --publish never
+
+      - name: Extract version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-windows-${{ steps.version.outputs.version }}
+          path: electron/release/*.exe
+
+      - name: Upload artifacts (Windows latest.yml)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-windows-latest-yml
+          path: electron/release/latest.yml
+
+      - name: Upload artifacts (Mac)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-macos-${{ steps.version.outputs.version }}
+          path: electron/release/*.dmg
+
+      - name: Upload artifacts (Mac latest-mac.yml)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-macos-latest-yml
+          path: electron/release/latest-mac.yml
+
+  publish-r2:
+    needs: build-electron
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Extract version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dev" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Install wrangler
+        run: npm install -g wrangler
+
+      - name: Upload Windows installer to R2
+        run: |
+          wrangler r2 object put \
+            vfss-releases/vFSS-Phone-Setup-${{ steps.version.outputs.version }}.exe \
+            --file ./artifacts/electron-windows-${{ steps.version.outputs.version }}/vFSS-Phone-Setup.exe
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Upload Mac DMG to R2
+        run: |
+          wrangler r2 object put \
+            vfss-releases/vFSS-Phone-${{ steps.version.outputs.version }}.dmg \
+            --file ./artifacts/electron-macos-${{ steps.version.outputs.version }}/vFSS-Phone.dmg
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Upload latest.yml to R2
+        run: |
+          wrangler r2 object put \
+            vfss-releases/latest.yml \
+            --file ./artifacts/electron-windows-latest-yml/latest.yml
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Upload latest-mac.yml to R2
+        run: |
+          wrangler r2 object put \
+            vfss-releases/latest-mac.yml \
+            --file ./artifacts/electron-macos-latest-yml/latest-mac.yml
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
